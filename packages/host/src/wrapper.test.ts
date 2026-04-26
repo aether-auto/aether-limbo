@@ -467,4 +467,44 @@ describe("runWrapper", () => {
     captured.emitExit({ exitCode: 0 });
     await promise;
   });
+
+  it("appends the __echo tab when LIMBO_DEBUG_ECHO=1 is in the environment", async () => {
+    const stdin = makeStdin();
+    const stdout = makeStdout();
+    const proc = new EventEmitter();
+    let captured: MockPty | undefined;
+    const factory = vi.fn((opts: PtySpawnOptions): IPty => {
+      captured = new MockPty(opts);
+      return captured;
+    });
+    let receivedOverlay: IOverlayController | undefined;
+    const promise = runWrapper({
+      claudeBin: "/fake/claude",
+      argv: [],
+      env: { LIMBO_DEBUG_ECHO: "1" },
+      cwd: "/tmp",
+      stdin,
+      stdout: stdout as unknown as NodeJS.WriteStream,
+      process: proc as unknown as NodeJS.Process,
+      ptyFactory: factory,
+      onOverlay: (o) => {
+        receivedOverlay = o;
+      },
+    });
+    if (!captured) throw new Error("factory not invoked synchronously");
+    expect(receivedOverlay).toBeDefined();
+    receivedOverlay?.open();
+    expect(stdout.written.join("")).toContain("Echo");
+    receivedOverlay?.close();
+    captured.emitExit({ exitCode: 0 });
+    await promise;
+  });
+
+  it("omits the __echo tab when LIMBO_DEBUG_ECHO is unset", async () => {
+    const { stdout, pty, promise } = setup();
+    // setup() passes `env: { PATH: "/usr/bin" }` — LIMBO_DEBUG_ECHO is absent
+    expect(stdout.written.join("")).not.toContain(" Echo ");
+    pty.emitExit({ exitCode: 0 });
+    await promise;
+  });
 });
