@@ -1,6 +1,6 @@
 import { describe, expectTypeOf, it } from "vitest";
-import type { IDisposable } from "../pty/types.js";
 import type { KeyAction } from "../overlay/types.js";
+import type { IDisposable } from "../pty/types.js";
 import type {
   AdapterDescriptor,
   AdapterLifecycleEvent,
@@ -12,9 +12,12 @@ import type {
 describe("adapter contract types", () => {
   it("IAdapter exposes id, mount, unmount, handleKey", () => {
     expectTypeOf<IAdapter["id"]>().toBeString();
-    expectTypeOf<IAdapter["mount"]>().toBeFunction();
-    expectTypeOf<IAdapter["unmount"]>().toBeFunction();
+    expectTypeOf<IAdapter["mount"]>().parameters.toEqualTypeOf<[IPane]>();
+    expectTypeOf<IAdapter["mount"]>().returns.toEqualTypeOf<Promise<void>>();
+    expectTypeOf<IAdapter["unmount"]>().parameters.toEqualTypeOf<[]>();
+    expectTypeOf<IAdapter["unmount"]>().returns.toEqualTypeOf<Promise<void>>();
     expectTypeOf<IAdapter["handleKey"]>().parameters.toEqualTypeOf<[KeyAction]>();
+    expectTypeOf<IAdapter["handleKey"]>().returns.toEqualTypeOf<void>();
   });
 
   it("IPane.setLines accepts readonly string[]", () => {

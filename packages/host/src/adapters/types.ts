@@ -1,12 +1,7 @@
 import type { KeyAction } from "../overlay/types.js";
 import type { IDisposable } from "../pty/types.js";
 
-export type AdapterLifecycleEvent =
-  | "mounting"
-  | "mounted"
-  | "unmounting"
-  | "unmounted"
-  | "errored";
+export type AdapterLifecycleEvent = "mounting" | "mounted" | "unmounting" | "unmounted" | "errored";
 
 export interface IPane {
   readonly cols: number;
