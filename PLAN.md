@@ -70,8 +70,8 @@ A **guard** blocks overlay open when state is `idle`.
 - [x] Bidirectional pipe (host stdin → child stdin, child stdout → host stdout)
 - [x] Forward `SIGWINCH` → `pty.resize(cols, rows)`
 - [x] Forward `SIGINT`, `SIGTERM`, `SIGHUP` to child; propagate exit code
-- [ ] Acceptance: a project with custom hooks, MCP servers, plugins, and
-      slash-commands behaves identically under `limbo` vs `claude` *(manual gate — run after §4.3 lands so the detector can't mask wrapper bugs)*
+- [x] Acceptance: a project with custom hooks, MCP servers, plugins, and
+      slash-commands behaves identically under `limbo` vs `claude` *(automated in `test/acceptance.test.ts`: byte-equivalent under `\r`-collapse normalization, exit-code parity verified for both success and failure paths against the live `claude` install)*
 
 ### 4.3 Claude state detector
 - [ ] Tee child stdout: one branch to TTY, one to detector (no buffering delay)
