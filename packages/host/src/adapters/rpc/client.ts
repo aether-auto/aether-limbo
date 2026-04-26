@@ -108,7 +108,15 @@ export class JsonRpcClient {
     }
     if ("method" in m && !("id" in m)) {
       const set = this.handlers.get(m.method);
-      if (set) for (const h of set) h(m.params);
+      if (set) {
+        for (const h of set) {
+          try {
+            h(m.params);
+          } catch {
+            // A misbehaving handler must not block its peers or kill the chunk pump.
+          }
+        }
+      }
       return;
     }
     if ("method" in m && "id" in m) {

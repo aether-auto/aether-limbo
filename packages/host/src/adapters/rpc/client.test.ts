@@ -123,4 +123,30 @@ describe("JsonRpcClient lifecycle", () => {
     expect(t.closed).toBe(true);
     await expect(p).rejects.toThrow(/transport closed/);
   });
+
+  it("dispose() is idempotent — second call is a no-op", () => {
+    const t = new FakeTransport();
+    const c = new JsonRpcClient(t);
+    c.dispose();
+    expect(t.closed).toBe(true);
+    // Second dispose must not throw and must not produce extra side effects.
+    expect(() => c.dispose()).not.toThrow();
+  });
+
+  it("a throwing notification handler does not block its peers or kill the chunk pump", () => {
+    const t = new FakeTransport();
+    const c = new JsonRpcClient(t);
+    const calls: string[] = [];
+    c.on("ev", () => {
+      calls.push("a");
+      throw new Error("boom");
+    });
+    c.on("ev", () => {
+      calls.push("b");
+    });
+    expect(() => {
+      t.emit(`${JSON.stringify({ jsonrpc: "2.0", method: "ev", params: null })}\n`);
+    }).not.toThrow();
+    expect(calls).toEqual(["a", "b"]);
+  });
 });
