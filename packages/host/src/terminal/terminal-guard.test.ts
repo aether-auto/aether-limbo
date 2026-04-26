@@ -22,17 +22,17 @@ function makeStdin(isTTY = true): FakeStdin {
 describe("TerminalGuard", () => {
   let proc: EventEmitter;
   let exitSpy: ReturnType<typeof vi.fn>;
-  let stderrWrite: ReturnType<typeof vi.spyOn>;
+  const stderrWrite = vi.spyOn(process.stderr, "write");
 
   beforeEach(() => {
     proc = new EventEmitter();
     exitSpy = vi.fn();
-    stderrWrite = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    stderrWrite.mockImplementation(() => true);
   });
 
   afterEach(() => {
     proc.removeAllListeners();
-    stderrWrite.mockRestore();
+    stderrWrite.mockReset();
   });
 
   it("puts a TTY stdin into raw mode on enter and restores it on restore", () => {
