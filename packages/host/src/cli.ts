@@ -1,9 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { cwd } from "node:process";
+import { VERSION } from "./index.js";
 import { defaultPtyFactory } from "./pty/spawn.js";
 import { ClaudeNotFoundError, resolveClaudeBin } from "./resolve-claude.js";
 import { TerminalGuard } from "./terminal/terminal-guard.js";
-import { VERSION } from "./index.js";
 import { runWrapper } from "./wrapper.js";
 
 function printVersion(claudeBin: string): void {
