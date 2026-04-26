@@ -1,3 +1,5 @@
+import { OverlayPane } from "../adapters/pane.js";
+import type { IAdapter, IAdapterRegistry } from "../adapters/types.js";
 import { DEFAULT_CHORD, type HotkeyChord, type IOverlayController } from "../hotkey/types.js";
 import type { IDisposable } from "../pty/types.js";
 import { OverlayKeymap } from "./keymap.js";
@@ -20,17 +22,25 @@ function moveCursor(row: number, col: number): string {
   return `\x1b[${row};${col}H`;
 }
 
+interface MountedAdapter {
+  readonly adapter: IAdapter;
+  readonly pane: OverlayPane;
+}
+
 export class LimboOverlay implements IOverlayController {
   private open_ = false;
   private activeIndex = 0;
   private readonly tabs: readonly TabDefinition[];
   private readonly chord: HotkeyChord;
+  private readonly registry: IAdapterRegistry | undefined;
   private readonly keymap = new OverlayKeymap();
   private stateSub: IDisposable | undefined;
+  private mounted: MountedAdapter | undefined;
 
   constructor(private readonly deps: OverlayDeps) {
     this.tabs = deps.tabs ?? DEFAULT_TABS;
     this.chord = deps.chord ?? DEFAULT_CHORD;
+    this.registry = deps.registry;
   }
 
   isOpen(): boolean {
@@ -51,6 +61,7 @@ export class LimboOverlay implements IOverlayController {
     this.stateSub = this.deps.detector.on("state", () => {
       if (this.open_) this.paintStatus();
     });
+    void this.mountActive();
   }
 
   close(): void {
@@ -58,6 +69,7 @@ export class LimboOverlay implements IOverlayController {
     this.open_ = false;
     this.stateSub?.dispose();
     this.stateSub = undefined;
+    void this.unmountActive();
     const { stdout } = this.deps;
     stdout.write(SHOW_CURSOR);
     stdout.write(ALT_SCREEN_EXIT);
@@ -69,8 +81,25 @@ export class LimboOverlay implements IOverlayController {
     if (actions.length === 0) return;
     let needsFullRepaint = false;
     let shouldClose = false;
+    let tabChanged = false;
     for (const action of actions) {
-      if (this.applyAction(action)) needsFullRepaint = true;
+      if (this.applyAction(action)) {
+        needsFullRepaint = true;
+        if (
+          action.kind === "tab-prev" ||
+          action.kind === "tab-next" ||
+          action.kind === "tab-jump"
+        ) {
+          tabChanged = true;
+        }
+      } else if (
+        action.kind === "scroll-up" ||
+        action.kind === "scroll-down" ||
+        action.kind === "scroll-top" ||
+        action.kind === "scroll-bottom"
+      ) {
+        this.mounted?.adapter.handleKey(action);
+      }
       if (action.kind === "close") {
         shouldClose = true;
         break;
@@ -79,6 +108,9 @@ export class LimboOverlay implements IOverlayController {
     if (shouldClose) {
       this.close();
       return;
+    }
+    if (tabChanged) {
+      void this.unmountActive().then(() => this.mountActive());
     }
     if (needsFullRepaint) this.paint();
   }
@@ -103,8 +135,6 @@ export class LimboOverlay implements IOverlayController {
         if (this.activeIndex === action.index) return false;
         this.activeIndex = action.index;
         return true;
-      // scroll-* actions are no-ops in §4.5 (panes are static placeholders).
-      // Real scrolling lands when adapters mount in §4.6+.
       case "scroll-up":
       case "scroll-down":
       case "scroll-top":
@@ -122,7 +152,7 @@ export class LimboOverlay implements IOverlayController {
     stdout.write(CLEAR_SCREEN);
     stdout.write(moveCursor(1, 1));
     stdout.write(renderTabBar({ tabs: this.tabs, activeIndex: this.activeIndex, cols }));
-    this.paintBody(cols, rows);
+    if (this.mounted === undefined) this.paintBody(cols, rows);
     this.paintStatus();
   }
 
@@ -158,5 +188,37 @@ export class LimboOverlay implements IOverlayController {
     const state = this.deps.detector.getState();
     stdout.write(moveCursor(rows, 1));
     stdout.write(renderStatusLine({ state, chord: this.chord, cols }));
+  }
+
+  private async mountActive(): Promise<void> {
+    if (this.mounted !== undefined) return;
+    if (!this.registry) return;
+    const tab = this.tabs[this.activeIndex];
+    if (!tab?.adapterId) return;
+    const adapter = this.registry.get(tab.adapterId);
+    if (!adapter) return;
+    const rows = this.deps.stdout.rows ?? DEFAULT_ROWS;
+    const pane = new OverlayPane({
+      stdout: this.deps.stdout,
+      topRow: 3,
+      bottomRow: Math.max(3, rows - 1),
+    });
+    this.mounted = { adapter, pane };
+    try {
+      await adapter.mount(pane);
+    } catch {
+      this.mounted = undefined;
+    }
+  }
+
+  private async unmountActive(): Promise<void> {
+    const m = this.mounted;
+    if (!m) return;
+    this.mounted = undefined;
+    try {
+      await m.adapter.unmount();
+    } catch {
+      // adapter teardown failures must not block the overlay lifecycle
+    }
   }
 }

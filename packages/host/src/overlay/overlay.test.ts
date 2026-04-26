@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
+import type { IAdapter, IAdapterRegistry, IPane } from "../adapters/types.js";
 import type { ClaudeState, IClaudeDetector, StateListener } from "../detector/types.js";
 import type { IDisposable } from "../pty/types.js";
 import { LimboOverlay } from "./overlay.js";
@@ -216,5 +217,120 @@ describe("LimboOverlay input handling", () => {
     overlay.handleInput("ql");
     expect(closeSpy).toHaveBeenCalledOnce();
     expect(overlay.isOpen()).toBe(false);
+  });
+});
+
+class RecordingAdapter implements IAdapter {
+  readonly id = "rec";
+  mountCalls = 0;
+  unmountCalls = 0;
+  keys: string[] = [];
+  pane: IPane | undefined;
+  async mount(pane: IPane): Promise<void> {
+    this.mountCalls++;
+    this.pane = pane;
+  }
+  async unmount(): Promise<void> {
+    this.unmountCalls++;
+  }
+  handleKey(a: { kind: string }): void {
+    this.keys.push(a.kind);
+  }
+}
+
+function registryWith(adapter: IAdapter): IAdapterRegistry {
+  return {
+    get: (id: string) => (id === "rec" ? adapter : undefined),
+    list: () => [],
+  };
+}
+
+describe("LimboOverlay adapter integration", () => {
+  it("mounts the active tab's adapter on open()", async () => {
+    const detector = new FakeDetector();
+    const stdout = makeStdout();
+    const adapter = new RecordingAdapter();
+    const overlay = new LimboOverlay({
+      stdout,
+      detector,
+      registry: registryWith(adapter),
+      tabs: [{ id: "__echo", label: "Echo", placeholderRef: "§4.6", adapterId: "rec" }],
+    });
+    overlay.open();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(adapter.mountCalls).toBe(1);
+  });
+
+  it("unmounts the previous adapter when the active tab changes", async () => {
+    const detector = new FakeDetector();
+    const stdout = makeStdout();
+    const a1 = new RecordingAdapter();
+    const a2 = new RecordingAdapter();
+    let returnSecond = false;
+    const registry: IAdapterRegistry = {
+      get: () => (returnSecond ? a2 : a1),
+      list: () => [],
+    };
+    const overlay = new LimboOverlay({
+      stdout,
+      detector,
+      registry,
+      tabs: [
+        { id: "__echo", label: "Echo", placeholderRef: "§4.6", adapterId: "rec" },
+        { id: "feed", label: "Feed", placeholderRef: "§4.6", adapterId: "rec" },
+      ],
+    });
+    overlay.open();
+    await Promise.resolve();
+    returnSecond = true;
+    overlay.handleInput("l");
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(a1.unmountCalls).toBe(1);
+    expect(a2.mountCalls).toBe(1);
+  });
+
+  it("forwards scroll-* actions to the active adapter", async () => {
+    const detector = new FakeDetector();
+    const stdout = makeStdout();
+    const adapter = new RecordingAdapter();
+    const overlay = new LimboOverlay({
+      stdout,
+      detector,
+      registry: registryWith(adapter),
+      tabs: [{ id: "__echo", label: "Echo", placeholderRef: "§4.6", adapterId: "rec" }],
+    });
+    overlay.open();
+    await Promise.resolve();
+    overlay.handleInput("j");
+    overlay.handleInput("k");
+    expect(adapter.keys).toEqual(["scroll-down", "scroll-up"]);
+  });
+
+  it("force-unmounts the active adapter on close()", async () => {
+    const detector = new FakeDetector();
+    const stdout = makeStdout();
+    const adapter = new RecordingAdapter();
+    const overlay = new LimboOverlay({
+      stdout,
+      detector,
+      registry: registryWith(adapter),
+      tabs: [{ id: "__echo", label: "Echo", placeholderRef: "§4.6", adapterId: "rec" }],
+    });
+    overlay.open();
+    await Promise.resolve();
+    overlay.close();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(adapter.unmountCalls).toBe(1);
+  });
+
+  it("tabs without an adapterId fall back to the static placeholder body", () => {
+    const detector = new FakeDetector();
+    const stdout = makeStdout();
+    const overlay = new LimboOverlay({ stdout, detector });
+    overlay.open();
+    expect(stdout.buffer.join("")).toContain("adapter not yet implemented");
   });
 });

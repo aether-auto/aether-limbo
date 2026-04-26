@@ -1,12 +1,14 @@
+import type { IAdapterRegistry } from "../adapters/types.js";
 import type { IClaudeDetector } from "../detector/types.js";
 import type { HotkeyChord, StdoutView } from "../hotkey/types.js";
 
-export type TabId = "reels" | "feed" | "dms" | "x" | "tiktok";
+export type TabId = "reels" | "feed" | "dms" | "x" | "tiktok" | "__echo";
 
 export interface TabDefinition {
   readonly id: TabId;
   readonly label: string;
   readonly placeholderRef: string;
+  readonly adapterId?: string;
 }
 
 export const DEFAULT_TABS: readonly TabDefinition[] = [
@@ -36,4 +38,5 @@ export interface OverlayDeps {
   readonly detector: IClaudeDetector;
   readonly chord?: HotkeyChord;
   readonly tabs?: readonly TabDefinition[];
+  readonly registry?: IAdapterRegistry;
 }
