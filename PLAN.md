@@ -82,12 +82,11 @@ A **guard** blocks overlay open when state is `idle`.
 - [x] Replay-test harness: record real PTY sessions, assert classification *(harness in `test/detector-replay.test.ts` reads `.bin` + timeline `.json` and parameterises by scenario name; `scripts/record-pty-fixture.mjs` captures real PTY sessions into the fixture format; `scenario-1` is synthetic, `scenario-2` is a real `claude --help` capture; long-running interactive recording is queued for 4.13)*
 
 ### 4.4 Hotkey interceptor & guard
-- [ ] Default chord `Ctrl+Shift+L`, configurable
-- [ ] Intercept in stdin → child path; never forward chord to Claude
-- [ ] Second press while overlay open → close overlay
-- [ ] Guard: if `state === 'idle'` on open attempt → print
-      **"be productive, dumbass."** centred, hold ~1.2 s, clear, abort open
-- [ ] Optional escalation copy after N idle attempts (off by default)
+- [x] Default chord `Ctrl+L` (`\x0c`), configurable via `RunWrapperOptions.chord` *(`Ctrl+Shift+L` is indistinguishable from `Ctrl+L` in default raw stdin without the Kitty keyboard protocol; default lands on the byte that actually arrives. `ChordMatcher` in `src/hotkey/chord-matcher.ts` handles arbitrary single- or multi-byte chord strings with cross-chunk prefix buffering — F12 / Alt+L / multi-key sequences all work when configured)*
+- [x] Intercept in stdin → child path; never forward chord to Claude *(`HotkeyInterceptor.feed` in `src/hotkey/interceptor.ts` runs every stdin chunk through the matcher and returns only the passthrough; `wrapper.ts` calls `pty.write` only when passthrough is non-empty. Verified by the new wrapper integration tests and by §4.2 byte-parity acceptance still passing for non-chord traffic)*
+- [x] Second press while overlay open → close overlay *(`handleChord` checks `overlay.isOpen()` first; two chord presses in one chunk are handled as open-then-close. Real overlay TUI lands in 4.5 — for now `NullOverlayController` is the seam)*
+- [x] Guard: if `state === 'idle'` on open attempt → print **"be productive, dumbass."** centred, hold ~1.2 s, clear, abort open *(`ShameFlash` in `src/hotkey/shame-flash.ts` enters alt-screen `\x1b[?1049h`, hides cursor, paints the message at `floor(rows/2)` centred horizontally, holds 1200 ms via injected `Clock`, then restores. Reentrancy-guarded: concurrent shame triggers coalesce. Fired non-blockingly so the user can keep typing into Claude during the flash — being productive is the actual escape from being shamed)*
+- [ ] Optional escalation copy after N idle attempts (off by default) *(deferred — design intentionally off-by-default; will land alongside 4.11 config so the threshold and copy live in `config.toml` rather than as a code constant)*
 
 ### 4.5 Limbo overlay (TUI shell)
 - [ ] Enter alt-screen on open; restore main screen on close (no leftover bytes)
@@ -95,6 +94,8 @@ A **guard** blocks overlay open when state is `idle`.
 - [ ] Bottom status line: Claude state + "press <chord> to return"
 - [ ] Vim nav: `h/j/k/l`, `g/G`, `q` to close, `1..5` jump to tab
 - [ ] Sub-pane host for `carbonyl` when an adapter requests video playback
+- [ ] **Carry-over from 4.4:** replace `NullOverlayController` (in `src/hotkey/overlay-stub.ts`) with the real overlay implementing `IOverlayController` (`isOpen` / `open` / `close`); inject it through `RunWrapperOptions.interceptor` (or extend the default-construction in `wrapper.ts` to wire the real overlay). The hotkey interceptor seam is already in place — the only remaining work in §4.4's column is swapping the stub for the real thing.
+- [ ] **Carry-over from 4.4:** when the overlay opens via the chord, it must redirect stdin away from the PTY for the duration it is open (input goes to the overlay's TUI, not Claude). Today the wrapper still pipes all non-chord bytes through to Claude unconditionally; §4.5 needs to teach the interceptor (or the wrapper) to route input to the overlay while `overlay.isOpen()` is true.
 
 ### 4.6 Adapter layer (Node ↔ Python sidecars)
 - [ ] Define `Adapter` interface: `mount(pane)`, `unmount()`, `handleKey(k)`
@@ -132,6 +133,9 @@ A **guard** blocks overlay open when state is `idle`.
       `[hotkey]`, `[adapters]`, `[guard]`, `[snapback]`
 - [ ] `limbo config edit` → opens in `$EDITOR`
 - [ ] First-run wizard if config missing
+- [ ] **Carry-over from 4.4 — `[hotkey]`:** wire the loaded chord into `RunWrapperOptions.chord` (already plumbed through `wrapper.ts` → `HotkeyInterceptor` → `ChordMatcher`; arbitrary single- or multi-byte byte strings are accepted today). Recommend the config syntax names the chord by escape (e.g. `chord = "\\x0c"` or `chord = "\\x1b[24~"`).
+- [ ] **Carry-over from 4.4 — `[guard]`:** implement the optional escalation copy after N idle attempts (deferred from §4.4 line 5). Threshold and copy lines belong in `[guard]`, e.g. `idle_attempts_before_escalation = 5`, `escalation_messages = [..]`. Off by default. The hotkey interceptor (`src/hotkey/interceptor.ts`) is the place to count idle-attempt firings and ask the shame renderer for an alternate message.
+- [ ] **Carry-over from 4.4 — `[guard]`:** the shame banner's hold duration and copy are already constructor-configurable on `ShameFlash` (`message`, `holdMs`); plumb them from `[guard]` into `wrapper.ts`'s default `ShameFlash` construction.
 
 ### 4.12 Distribution & update story
 - [ ] Publish `@aether/limbo` on npm with `bin: limbo`

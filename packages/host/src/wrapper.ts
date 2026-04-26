@@ -1,5 +1,9 @@
 import { ClaudeStateDetector } from "./detector/detector.js";
 import type { IClaudeDetector } from "./detector/types.js";
+import { HotkeyInterceptor } from "./hotkey/interceptor.js";
+import { NullOverlayController } from "./hotkey/overlay-stub.js";
+import { ShameFlash } from "./hotkey/shame-flash.js";
+import type { HotkeyChord, IHotkeyInterceptor } from "./hotkey/types.js";
 import { translateExit } from "./pty/exit-code.js";
 import type { IDisposable, IPty, PtyFactory } from "./pty/types.js";
 
@@ -25,6 +29,9 @@ export interface RunWrapperOptions {
   readonly ptyFactory: PtyFactory;
   readonly detector?: IClaudeDetector;
   readonly onDetector?: (d: IClaudeDetector) => void;
+  readonly interceptor?: IHotkeyInterceptor;
+  readonly onInterceptor?: (i: IHotkeyInterceptor) => void;
+  readonly chord?: HotkeyChord;
 }
 
 const FORWARDED_SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
@@ -49,8 +56,20 @@ export function runWrapper(opts: RunWrapperOptions): Promise<number> {
   const detector: IClaudeDetector = opts.detector ?? new ClaudeStateDetector();
   opts.onDetector?.(detector);
 
+  const interceptor: IHotkeyInterceptor =
+    opts.interceptor ??
+    new HotkeyInterceptor({
+      detector,
+      overlay: new NullOverlayController(),
+      shame: new ShameFlash({ stdout: opts.stdout }),
+      ...(opts.chord !== undefined ? { chord: opts.chord } : {}),
+    });
+  opts.onInterceptor?.(interceptor);
+
   const onStdinData = (chunk: Buffer | string): void => {
-    pty.write(typeof chunk === "string" ? chunk : chunk.toString("binary"));
+    const text = typeof chunk === "string" ? chunk : chunk.toString("binary");
+    const passthrough = interceptor.feed(text);
+    if (passthrough.length > 0) pty.write(passthrough);
   };
   opts.stdin.on("data", onStdinData);
 

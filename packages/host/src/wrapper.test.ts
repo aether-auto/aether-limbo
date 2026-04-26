@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
 import type { IClaudeDetector } from "./detector/types.js";
+import type { IHotkeyInterceptor } from "./hotkey/types.js";
 import type { IDisposable, IPty, PtyExit, PtySpawnOptions } from "./pty/types.js";
 import { runWrapper } from "./wrapper.js";
 
@@ -174,6 +175,100 @@ describe("runWrapper", () => {
     expect(stdin.listenerCount("data")).toBe(0);
     expect(proc.listenerCount("SIGINT")).toBe(0);
     expect(proc.listenerCount("SIGWINCH")).toBe(0);
+  });
+
+  it("routes stdin bytes through the hotkey interceptor and only forwards passthrough", async () => {
+    const stdin = makeStdin();
+    const stdout = makeStdout();
+    const proc = new EventEmitter();
+    let captured: MockPty | undefined;
+    const factory = vi.fn((opts: PtySpawnOptions): IPty => {
+      captured = new MockPty(opts);
+      return captured;
+    });
+    const seen: string[] = [];
+    const recording: IHotkeyInterceptor = {
+      feed(chunk: string): string {
+        seen.push(chunk);
+        return chunk.split("\x0c").join("");
+      },
+    };
+    const promise = runWrapper({
+      claudeBin: "/fake/claude",
+      argv: [],
+      env: {},
+      cwd: "/tmp",
+      stdin,
+      stdout: stdout as unknown as NodeJS.WriteStream,
+      process: proc as unknown as NodeJS.Process,
+      ptyFactory: factory,
+      interceptor: recording,
+    });
+    if (!captured) throw new Error("factory not invoked synchronously");
+    stdin.emit("data", Buffer.from("hi\x0c!"));
+    expect(seen).toEqual(["hi\x0c!"]);
+    expect(captured.writes).toEqual(["hi!"]);
+    captured.emitExit({ exitCode: 0 });
+    await promise;
+  });
+
+  it("does not call pty.write when the interceptor swallows every byte", async () => {
+    const stdin = makeStdin();
+    const stdout = makeStdout();
+    const proc = new EventEmitter();
+    let captured: MockPty | undefined;
+    const factory = vi.fn((opts: PtySpawnOptions): IPty => {
+      captured = new MockPty(opts);
+      return captured;
+    });
+    const swallow: IHotkeyInterceptor = { feed: () => "" };
+    const promise = runWrapper({
+      claudeBin: "/fake/claude",
+      argv: [],
+      env: {},
+      cwd: "/tmp",
+      stdin,
+      stdout: stdout as unknown as NodeJS.WriteStream,
+      process: proc as unknown as NodeJS.Process,
+      ptyFactory: factory,
+      interceptor: swallow,
+    });
+    if (!captured) throw new Error("factory not invoked synchronously");
+    stdin.emit("data", Buffer.from("\x0c"));
+    expect(captured.writes).toEqual([]);
+    captured.emitExit({ exitCode: 0 });
+    await promise;
+  });
+
+  it("exposes the wired interceptor via onInterceptor when defaults are used", async () => {
+    const onInterceptor = vi.fn();
+    const { pty, promise } = setup();
+    pty.emitExit({ exitCode: 0 });
+    await promise;
+    // setup() does not pass onInterceptor, so verify a separate run does.
+    const stdin2 = makeStdin();
+    const stdout2 = makeStdout();
+    const proc2 = new EventEmitter();
+    let captured: MockPty | undefined;
+    const factory = vi.fn((opts: PtySpawnOptions): IPty => {
+      captured = new MockPty(opts);
+      return captured;
+    });
+    const promise2 = runWrapper({
+      claudeBin: "/fake/claude",
+      argv: [],
+      env: {},
+      cwd: "/tmp",
+      stdin: stdin2,
+      stdout: stdout2 as unknown as NodeJS.WriteStream,
+      process: proc2 as unknown as NodeJS.Process,
+      ptyFactory: factory,
+      onInterceptor,
+    });
+    if (!captured) throw new Error("factory not invoked synchronously");
+    expect(onInterceptor).toHaveBeenCalledOnce();
+    captured.emitExit({ exitCode: 0 });
+    await promise2;
   });
 
   it("a throwing detector never blocks pass-through to stdout", async () => {
