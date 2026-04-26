@@ -81,12 +81,19 @@ export function encodeError(args: {
 export class NdjsonDecoder {
   private buffer = "";
 
+  /**
+   * Decode any complete NDJSON envelopes from `chunk`, buffering partial trailing
+   * lines for the next call. Whitespace-only lines (incl. trailing CRLF) are
+   * skipped silently; everything else throws if it isn't a valid JSON-RPC 2.0
+   * envelope.
+   */
   feed(chunk: string): JsonRpcMessage[] {
     this.buffer += chunk;
     const out: JsonRpcMessage[] = [];
     let nl = this.buffer.indexOf("\n");
     while (nl !== -1) {
-      const line = this.buffer.slice(0, nl);
+      const rawLine = this.buffer.slice(0, nl);
+      const line = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine;
       this.buffer = this.buffer.slice(nl + 1);
       if (line.trim().length > 0) out.push(this.parse(line));
       nl = this.buffer.indexOf("\n");
@@ -107,6 +114,10 @@ export class NdjsonDecoder {
       (parsed as { jsonrpc?: unknown }).jsonrpc !== "2.0"
     ) {
       throw new Error("NdjsonDecoder: missing jsonrpc:'2.0' tag");
+    }
+    const obj = parsed as Record<string, unknown>;
+    if (!("method" in obj || "result" in obj || "error" in obj)) {
+      throw new Error("NdjsonDecoder: envelope has jsonrpc tag but no method/result/error");
     }
     return parsed as JsonRpcMessage;
   }
