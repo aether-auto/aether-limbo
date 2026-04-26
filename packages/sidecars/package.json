@@ -1,0 +1,12 @@
+{
+  "name": "@aether/limbo-sidecars",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Python sidecar adapters (managed via pyproject.toml; not built by pnpm).",
+  "scripts": {
+    "build": "echo 'sidecars are Python — no JS build'",
+    "typecheck": "echo 'sidecars: skipped (Python)'",
+    "lint": "echo 'sidecars: ruff runs in CI'",
+    "test": "echo 'sidecars: pytest runs in CI'"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "aether-limbo-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Transparent Claude Code wrapper that lets you doom-scroll while the agent is busy.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@8.15.5",
+  "scripts": {
+    "build": "pnpm -r --filter \"./packages/*\" run build",
+    "typecheck": "pnpm -r --filter \"./packages/*\" run typecheck",
+    "test": "pnpm -r --filter \"./packages/*\" run test",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "limbo": "pnpm --filter @aether/limbo-host exec limbo"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "typescript": "^5.6.3"
+  }
+}

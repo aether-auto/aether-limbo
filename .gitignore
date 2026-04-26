@@ -1,3 +1,18 @@
+# --- Node / pnpm / TypeScript ---
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+.pnpm-store/
+.turbo/
+.tsup/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+
+# --- Python ---
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
