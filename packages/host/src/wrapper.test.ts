@@ -1,7 +1,8 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
 import type { IClaudeDetector } from "./detector/types.js";
-import type { IHotkeyInterceptor } from "./hotkey/types.js";
+import { NullOverlayController } from "./hotkey/overlay-stub.js";
+import type { IHotkeyInterceptor, IOverlayController } from "./hotkey/types.js";
 import type { IDisposable, IPty, PtyExit, PtySpawnOptions } from "./pty/types.js";
 import { runWrapper } from "./wrapper.js";
 
@@ -145,6 +146,39 @@ describe("runWrapper", () => {
     await promise;
   });
 
+  it("forwards SIGWINCH to the overlay too — but only while it is open", async () => {
+    const stdin = makeStdin();
+    const stdout = makeStdout(80, 24);
+    const proc = new EventEmitter();
+    let captured: MockPty | undefined;
+    const factory = vi.fn((opts: PtySpawnOptions): IPty => {
+      captured = new MockPty(opts);
+      return captured;
+    });
+    const overlay = new NullOverlayController();
+    const promise = runWrapper({
+      claudeBin: "/fake/claude",
+      argv: [],
+      env: {},
+      cwd: "/tmp",
+      stdin,
+      stdout: stdout as unknown as NodeJS.WriteStream,
+      process: proc as unknown as NodeJS.Process,
+      ptyFactory: factory,
+      overlay,
+    });
+    if (!captured) throw new Error("factory not invoked synchronously");
+    stdout.columns = 132;
+    stdout.rows = 50;
+    proc.emit("SIGWINCH");
+    expect(overlay.resizes).toEqual([]);
+    overlay.open();
+    proc.emit("SIGWINCH");
+    expect(overlay.resizes).toEqual([{ cols: 132, rows: 50 }]);
+    captured.emitExit({ exitCode: 0 });
+    await promise;
+  });
+
   it.each([["SIGINT"], ["SIGTERM"], ["SIGHUP"]])(
     "forwards %s to the child instead of dying itself",
     async (sigName) => {
@@ -269,6 +303,128 @@ describe("runWrapper", () => {
     expect(onInterceptor).toHaveBeenCalledOnce();
     captured.emitExit({ exitCode: 0 });
     await promise2;
+  });
+
+  it("routes stdin to the overlay (not the PTY) while overlay.isOpen()", async () => {
+    const stdin = makeStdin();
+    const stdout = makeStdout();
+    const proc = new EventEmitter();
+    let captured: MockPty | undefined;
+    const factory = vi.fn((opts: PtySpawnOptions): IPty => {
+      captured = new MockPty(opts);
+      return captured;
+    });
+    const overlay = new NullOverlayController();
+    overlay.open();
+    const promise = runWrapper({
+      claudeBin: "/fake/claude",
+      argv: [],
+      env: {},
+      cwd: "/tmp",
+      stdin,
+      stdout: stdout as unknown as NodeJS.WriteStream,
+      process: proc as unknown as NodeJS.Process,
+      ptyFactory: factory,
+      overlay,
+    });
+    if (!captured) throw new Error("factory not invoked synchronously");
+    stdin.emit("data", Buffer.from("hjkl"));
+    expect(overlay.inputs).toEqual(["hjkl"]);
+    expect(captured.writes).toEqual([]);
+    captured.emitExit({ exitCode: 0 });
+    await promise;
+  });
+
+  it("routes stdin back to the PTY once the overlay closes", async () => {
+    const stdin = makeStdin();
+    const stdout = makeStdout();
+    const proc = new EventEmitter();
+    let captured: MockPty | undefined;
+    const factory = vi.fn((opts: PtySpawnOptions): IPty => {
+      captured = new MockPty(opts);
+      return captured;
+    });
+    const overlay = new NullOverlayController();
+    overlay.open();
+    const promise = runWrapper({
+      claudeBin: "/fake/claude",
+      argv: [],
+      env: {},
+      cwd: "/tmp",
+      stdin,
+      stdout: stdout as unknown as NodeJS.WriteStream,
+      process: proc as unknown as NodeJS.Process,
+      ptyFactory: factory,
+      overlay,
+    });
+    if (!captured) throw new Error("factory not invoked synchronously");
+    stdin.emit("data", Buffer.from("hi"));
+    expect(captured.writes).toEqual([]);
+    overlay.close();
+    stdin.emit("data", Buffer.from("there"));
+    expect(captured.writes).toEqual(["there"]);
+    captured.emitExit({ exitCode: 0 });
+    await promise;
+  });
+
+  it("closes a still-open overlay when the PTY exits", async () => {
+    const stdin = makeStdin();
+    const stdout = makeStdout();
+    const proc = new EventEmitter();
+    let captured: MockPty | undefined;
+    const factory = vi.fn((opts: PtySpawnOptions): IPty => {
+      captured = new MockPty(opts);
+      return captured;
+    });
+    const overlay = new NullOverlayController();
+    overlay.open();
+    const promise = runWrapper({
+      claudeBin: "/fake/claude",
+      argv: [],
+      env: {},
+      cwd: "/tmp",
+      stdin,
+      stdout: stdout as unknown as NodeJS.WriteStream,
+      process: proc as unknown as NodeJS.Process,
+      ptyFactory: factory,
+      overlay,
+    });
+    if (!captured) throw new Error("factory not invoked synchronously");
+    expect(overlay.isOpen()).toBe(true);
+    captured.emitExit({ exitCode: 0 });
+    await promise;
+    expect(overlay.isOpen()).toBe(false);
+    expect(overlay.closes).toBe(1);
+  });
+
+  it("exposes the wired overlay via onOverlay when defaults are used", async () => {
+    const stdin = makeStdin();
+    const stdout = makeStdout();
+    const proc = new EventEmitter();
+    let captured: MockPty | undefined;
+    const factory = vi.fn((opts: PtySpawnOptions): IPty => {
+      captured = new MockPty(opts);
+      return captured;
+    });
+    let received: IOverlayController | undefined;
+    const promise = runWrapper({
+      claudeBin: "/fake/claude",
+      argv: [],
+      env: {},
+      cwd: "/tmp",
+      stdin,
+      stdout: stdout as unknown as NodeJS.WriteStream,
+      process: proc as unknown as NodeJS.Process,
+      ptyFactory: factory,
+      onOverlay: (o) => {
+        received = o;
+      },
+    });
+    if (!captured) throw new Error("factory not invoked synchronously");
+    expect(received).toBeDefined();
+    expect(received?.isOpen()).toBe(false);
+    captured.emitExit({ exitCode: 0 });
+    await promise;
   });
 
   it("a throwing detector never blocks pass-through to stdout", async () => {

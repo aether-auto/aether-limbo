@@ -11,6 +11,8 @@ export interface IOverlayController {
   isOpen(): boolean;
   open(): void;
   close(): void;
+  handleInput(chunk: string): void;
+  handleResize(cols: number, rows: number): void;
 }
 
 export interface IShameRenderer {

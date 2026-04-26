@@ -1,9 +1,9 @@
 import { ClaudeStateDetector } from "./detector/detector.js";
 import type { IClaudeDetector } from "./detector/types.js";
 import { HotkeyInterceptor } from "./hotkey/interceptor.js";
-import { NullOverlayController } from "./hotkey/overlay-stub.js";
 import { ShameFlash } from "./hotkey/shame-flash.js";
-import type { HotkeyChord, IHotkeyInterceptor } from "./hotkey/types.js";
+import type { HotkeyChord, IHotkeyInterceptor, IOverlayController } from "./hotkey/types.js";
+import { LimboOverlay } from "./overlay/overlay.js";
 import { translateExit } from "./pty/exit-code.js";
 import type { IDisposable, IPty, PtyFactory } from "./pty/types.js";
 
@@ -31,6 +31,8 @@ export interface RunWrapperOptions {
   readonly onDetector?: (d: IClaudeDetector) => void;
   readonly interceptor?: IHotkeyInterceptor;
   readonly onInterceptor?: (i: IHotkeyInterceptor) => void;
+  readonly overlay?: IOverlayController;
+  readonly onOverlay?: (o: IOverlayController) => void;
   readonly chord?: HotkeyChord;
 }
 
@@ -56,11 +58,20 @@ export function runWrapper(opts: RunWrapperOptions): Promise<number> {
   const detector: IClaudeDetector = opts.detector ?? new ClaudeStateDetector();
   opts.onDetector?.(detector);
 
+  const overlay: IOverlayController =
+    opts.overlay ??
+    new LimboOverlay({
+      stdout: opts.stdout,
+      detector,
+      ...(opts.chord !== undefined ? { chord: opts.chord } : {}),
+    });
+  opts.onOverlay?.(overlay);
+
   const interceptor: IHotkeyInterceptor =
     opts.interceptor ??
     new HotkeyInterceptor({
       detector,
-      overlay: new NullOverlayController(),
+      overlay,
       shame: new ShameFlash({ stdout: opts.stdout }),
       ...(opts.chord !== undefined ? { chord: opts.chord } : {}),
     });
@@ -69,7 +80,12 @@ export function runWrapper(opts: RunWrapperOptions): Promise<number> {
   const onStdinData = (chunk: Buffer | string): void => {
     const text = typeof chunk === "string" ? chunk : chunk.toString("binary");
     const passthrough = interceptor.feed(text);
-    if (passthrough.length > 0) pty.write(passthrough);
+    if (passthrough.length === 0) return;
+    if (overlay.isOpen()) {
+      overlay.handleInput(passthrough);
+    } else {
+      pty.write(passthrough);
+    }
   };
   opts.stdin.on("data", onStdinData);
 
@@ -77,6 +93,7 @@ export function runWrapper(opts: RunWrapperOptions): Promise<number> {
     const c = opts.stdout.columns ?? DEFAULT_COLS;
     const r = opts.stdout.rows ?? DEFAULT_ROWS;
     pty.resize(c, r);
+    if (overlay.isOpen()) overlay.handleResize(c, r);
   };
   opts.process.on("SIGWINCH", onWinch);
 
@@ -107,6 +124,7 @@ export function runWrapper(opts: RunWrapperOptions): Promise<number> {
           opts.process.off(sig, handler);
         }
         for (const d of disposables) d.dispose();
+        if (overlay.isOpen()) overlay.close();
         detector.dispose();
         resolve(translateExit(event));
       }),
