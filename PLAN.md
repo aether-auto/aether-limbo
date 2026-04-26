@@ -64,14 +64,14 @@ A **guard** blocks overlay open when state is `idle`.
 - [x] `README.md` with install + hotkey docs
 
 ### 4.2 Transparent PTY wrapper (the "pure wrapper" core)
-- [ ] Resolve `claude` from `PATH`; clear error if missing
-- [ ] `pty.spawn(claudeBin, process.argv.slice(2), { env: process.env, cwd, cols, rows })`
-- [ ] Set host stdin to raw, no echo; restore on exit / signal / panic
-- [ ] Bidirectional pipe (host stdin → child stdin, child stdout → host stdout)
-- [ ] Forward `SIGWINCH` → `pty.resize(cols, rows)`
-- [ ] Forward `SIGINT`, `SIGTERM`, `SIGHUP` to child; propagate exit code
+- [x] Resolve `claude` from `PATH`; clear error if missing
+- [x] `pty.spawn(claudeBin, process.argv.slice(2), { env: process.env, cwd, cols, rows })`
+- [x] Set host stdin to raw, no echo; restore on exit / signal / panic
+- [x] Bidirectional pipe (host stdin → child stdin, child stdout → host stdout)
+- [x] Forward `SIGWINCH` → `pty.resize(cols, rows)`
+- [x] Forward `SIGINT`, `SIGTERM`, `SIGHUP` to child; propagate exit code
 - [ ] Acceptance: a project with custom hooks, MCP servers, plugins, and
-      slash-commands behaves identically under `limbo` vs `claude`
+      slash-commands behaves identically under `limbo` vs `claude` *(manual gate — run after §4.3 lands so the detector can't mask wrapper bugs)*
 
 ### 4.3 Claude state detector
 - [ ] Tee child stdout: one branch to TTY, one to detector (no buffering delay)

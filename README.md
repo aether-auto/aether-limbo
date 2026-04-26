@@ -15,7 +15,7 @@ Early scaffolding. See [PLAN.md](./PLAN.md) for the full roadmap.
 | Phase | Status |
 | --- | --- |
 | §4.1 Project scaffolding | done |
-| §4.2 Transparent PTY wrapper | not started |
+| §4.2 Transparent PTY wrapper | done |
 | §4.3 State detector | not started |
 | §4.4 Hotkey + guard | not started |
 | §4.5–4.9 Overlay & adapters | not started |
