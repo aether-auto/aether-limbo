@@ -32,7 +32,7 @@ def _echo(params: Any) -> dict[str, Any]:
 def main() -> int:
     jsonrpc.notify(
         "body/update",
-        {"lines": ["echo sidecar ready", "round-trips: 0", "press j to ping"]},
+        {"lines": ["echo sidecar ready", "press j to ping"]},
     )
     jsonrpc.serve({"ping": _ping, "echo": _echo})
     return 0
