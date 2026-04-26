@@ -28,7 +28,7 @@
     "smoke": "node dist/cli.js --version"
   },
   "dependencies": {
-    "node-pty": "^1.0.0"
+    "node-pty": "1.2.0-beta.12"
   },
   "devDependencies": {
     "@types/node": "^22.7.5",
