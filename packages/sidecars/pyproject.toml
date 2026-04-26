@@ -3,7 +3,7 @@ name = "aether-limbo-sidecars"
 version = "0.0.0"
 description = "Python sidecar adapters for aether-limbo (Instagram, X, TikTok)."
 readme = "README.md"
-requires-python = ">=3.11,<3.13"
+requires-python = ">=3.11,<3.15"
 license = { text = "MIT" }
 authors = [{ name = "aether-limbo" }]
 dependencies = []
@@ -19,6 +19,9 @@ all = [
   "playwright>=1.47.0",
 ]
 dev = ["ruff>=0.6.0", "mypy>=1.11.0"]
+
+[project.scripts]
+limbo-sidecar = "limbo_sidecars.__main__:main"
 
 [build-system]
 requires = ["hatchling"]
