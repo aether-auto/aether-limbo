@@ -1,0 +1,59 @@
+{
+  "name": "scenario-2 (recorded claude --help)",
+  "description": "Recorded `claude --help` PTY output. No spinner / tool / prompt sigil — exercises the streaming → (long debounce) → idle path on real ANSI bytes.",
+  "debounceMs": 150,
+  "initialState": "idle",
+  "chunks": [
+    {
+      "atMs": 90,
+      "text": "Usage: claude [options] [command] [prompt]\r\n\r\nClaude Code - starts an interactive session by default, use -p/--print for\r\nnon-interactive output\r\n\r\nArguments:\r\n  prompt                                            Your prompt\r\n\r\nOptions:\r\n  --add-dir <directories...>                        Additional directories to allow tool access to\r\n  --agent <agent>                                   Agent for the current session. Overrides the 'agent' setting.\r\n  --agents <json>                                   JSON object defining custom agents (e.g. '{\"reviewer\": {\"description\": \"Reviews code\", \"prompt\": \"You are a code reviewer\"}}')\r\n  --allow-dangerously-skip-permissions              Enable bypassing all permission checks as an option, without it being enabled by default. Recommended only for sandboxes with no internet access.\r\n  --allowedTools, --allowed-tools <tools...>        Comma or space-separated list of tool names to allow (e.g. \"Bash(git *) Edit\")\r\n  --append-system-prompt <prompt>                   Append a ",
+      "expectAfter": "streaming"
+    },
+    {
+      "atMs": 90,
+      "text": "system prompt to the default system prompt\r\n  --bare                                            Minimal mode: skip hooks, LSP, plugin sync, attribution, auto-memory, background prefetches, keychain reads, and CLAUDE.md auto-discovery. Sets CLAUDE_CODE_SIMPLE=1. Anthropic auth is strictly ANTHROPIC_API_KEY or apiKeyHelper via --settings (OAuth and keychain are never read). 3P providers (Bedrock/Vertex/Foundry) use their own credentials. Skills still resolve via /skill-name. Explicitly provide context via: --system-prompt[-file], --append-system-prompt[-file], --add-dir (CLAUDE.md dirs), --mcp-config, --settings, --agents, --plugin-dir.\r\n  --betas <betas...>                                Beta headers to include in API requests (API key users only)\r\n  --brief                                           Enable SendUserMessage tool for agent-to-user communication\r\n  --chrome                                          Enable Claude in Chrome integration\r\n  -c, --continue                                    Continue the"
+    },
+    {
+      "atMs": 90,
+      "text": " most recent conversation in the current directory\r\n  --dangerously-skip-permissions                    Bypass all permission checks. Recommended only for sandboxes with no internet access.\r\n  -d, --debug [filter]                              Enable debug mode with optional category filtering (e.g., \"api,hooks\" or \"!1p,!file\")\r\n  --debug-file <path>                               Write debug logs to a specific file path (implicitly enables debug mode)\r\n  --disable-slash-commands                          Disable all skills\r\n  --disallowedTools, --disallowed-tools <tools...>  Comma or space-separated list of tool names to deny (e.g. \"Bash(git *) Edit\")\r\n  --effort <level>                                  Effort level for the current session (low, medium, high, xhigh, max)\r\n  --exclude-dynamic-system-prompt-sections          Move per-machine sections (cwd, env info, memory paths, git status) from the system prompt into the first user message. Improves cross-user prompt-cache reuse. Only applies with the default s"
+    },
+    {
+      "atMs": 90,
+      "text": "ystem prompt (ignored with --system-prompt). (default: false)\r\n  --fallback-model <model>                          Enable automatic fallback to specified model when default model is overloaded (only works with --print)\r\n  --file <specs...>                                 File resources to download at startup. Format: file_id:relative_path (e.g., --file file_abc:doc.txt file_def:img.png)\r\n  --fork-session                                    When resuming, create a new session ID instead of reusing the original (use with --resume or --continue)\r\n  --from-pr [value]                                 Resume a session linked to a PR by PR number/URL, or open interactive picker with optional search term\r\n  -h, --help                                        Display help for command\r\n  --ide                                             Automatically connect to IDE on startup if exactly one valid IDE is available\r\n  --include-hook-events                             Include all hook lifecycle events in the output stream (on"
+    },
+    {
+      "atMs": 90,
+      "text": "ly works with --output-format=stream-json)\r\n  --include-partial-messages                        Include partial message chunks as they arrive (only works with --print and --output-format=stream-json)\r\n  --input-format <format>                           Input format (only works with --print): \"text\" (default), or \"stream-json\" (realtime streaming input) (choices: \"text\", \"stream-json\")\r\n  --json-schema <schema>                            JSON Schema for structured output validation. Example: {\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}\r\n  --max-budget-usd <amount>                         Maximum dollar amount to spend on API calls (only works with --print)\r\n  --mcp-config <configs...>                         Load MCP servers from JSON files or strings (space-separated)\r\n  --mcp-debug                                       [DEPRECATED. Use --debug instead] Enable MCP debug mode (shows MCP server errors)\r\n  --model <model>                                   Model for the current se"
+    },
+    {
+      "atMs": 90,
+      "text": "ssion. Provide an alias for the latest model (e.g. 'sonnet' or 'opus') or a model's full name (e.g. 'claude-sonnet-4-6').\r\n  -n, --name <name>                                 Set a display name for this session (shown in the prompt box, /resume picker, and terminal title)\r\n  --no-chrome                                       Disable Claude in Chrome integration\r\n  --no-session-persistence                          Disable session persistence - sessions will not be saved to disk and cannot be resumed (only works with --print)\r\n  --output-format <format>                          Output format (only works with --print): \"text\" (default), \"json\" (single result), or \"stream-json\" (realtime streaming) (choices: \"text\", \"json\", \"stream-json\")\r\n  --permission-mode <mode>                          Permission mode to use for the session (choices: \"acceptEdits\", \"auto\", \"bypassPermissions\", \"default\", \"dontAsk\", \"plan\")\r\n  --plugin-dir <path>                               Load plugins from a directory for this session only"
+    },
+    {
+      "atMs": 90,
+      "text": " (repeatable: --plugin-dir A --plugin-dir B) (default: [])\r\n  -p, --print                                       Print response and exit (useful for pipes). Note: The workspace trust dialog is skipped when Claude is run with the -p mode. Only use this flag in directories you trust.\r\n  --remote-control-session-name-prefix <prefix>     Prefix for auto-generated Remote Control session names (default: hostname)\r\n  --replay-user-messages                            Re-emit user messages from stdin back on stdout for acknowledgment (only works with --input-format=stream-json and --output-format=stream-json)\r\n  -r, --resume [value]                              Resume a conversation by session ID, or open interactive picker with optional search term\r\n  --session-id <uuid>                               Use a specific session ID for the conversation (must be a valid UUID)\r\n  --setting-sources <sources>                       Comma-separated list of setting sources to load (user, project, local).\r\n  --settings <file-or-jso"
+    },
+    {
+      "atMs": 90,
+      "text": "n>                         Path to a settings JSON file or a JSON string to load additional settings from\r\n  --strict-mcp-config                               Only use MCP servers from --mcp-config, ignoring all other MCP configurations\r\n  --system-prompt <prompt>                          System prompt to use for the session\r\n  --tmux                                            Create a tmux session for the worktree (requires --worktree). Uses iTerm2 native panes when available; use --tmux=classic for traditional tmux.\r\n  --tools <tools...>                                Specify the list of available tools from the built-in set. Use \"\" to disable all tools, \"default\" to use all tools, or specify tool names (e.g. \"Bash,Edit,Read\").\r\n  --verbose                                         Override verbose mode setting from config\r\n  -v, --version                                     Output the version number\r\n  -w, --worktree [name]                             Create a new git worktree for this session (optionally sp"
+    },
+    {
+      "atMs": 90,
+      "text": "ecify a name)\r\n\r\nCommands:\r\n  agents [options]                                  Manage background and configured agents\r\n  auth                                              Manage authentication\r\n  auto-mode                                         Inspect auto mode classifier configuration\r\n  doctor                                            Check the health of your Claude Code auto-updater. Note: The workspace trust dialog is skipped and stdio servers from .mcp.json are spawned for health checks. Only use this command in directories you trust.\r\n  install [options] [target]                        Install Claude Code native build. Use [target] to specify version (stable, latest, or specific version)\r\n  mcp                                               Configure and manage MCP servers\r\n  plugin|plugins                                    Manage Claude Code plugins\r\n  setup-token                                       Set up a long-lived authentication token (requires Claude subscription)\r\n  update|upgrade        "
+    },
+    {
+      "atMs": 90,
+      "text": "                            Check for updates and install if available\r\n"
+    },
+    {
+      "atMs": 90,
+      "text": "\u001b[?25h",
+      "expectAfter": "streaming"
+    }
+  ],
+  "settleAfterMs": 700,
+  "finalState": "idle",
+  "recordedAt": "2026-04-26T08:23:08.579Z",
+  "childExitCode": 0,
+  "childSignal": 0
+}

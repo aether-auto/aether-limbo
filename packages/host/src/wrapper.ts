@@ -1,3 +1,5 @@
+import { ClaudeStateDetector } from "./detector/detector.js";
+import type { IClaudeDetector } from "./detector/types.js";
 import { translateExit } from "./pty/exit-code.js";
 import type { IDisposable, IPty, PtyFactory } from "./pty/types.js";
 
@@ -21,6 +23,8 @@ export interface RunWrapperOptions {
   readonly stdout: WrapperStdout;
   readonly process: NodeJS.EventEmitter;
   readonly ptyFactory: PtyFactory;
+  readonly detector?: IClaudeDetector;
+  readonly onDetector?: (d: IClaudeDetector) => void;
 }
 
 const FORWARDED_SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
@@ -42,6 +46,8 @@ export function runWrapper(opts: RunWrapperOptions): Promise<number> {
   });
 
   const disposables: IDisposable[] = [];
+  const detector: IClaudeDetector = opts.detector ?? new ClaudeStateDetector();
+  opts.onDetector?.(detector);
 
   const onStdinData = (chunk: Buffer | string): void => {
     pty.write(typeof chunk === "string" ? chunk : chunk.toString("binary"));
@@ -65,6 +71,11 @@ export function runWrapper(opts: RunWrapperOptions): Promise<number> {
   disposables.push(
     pty.onData((data) => {
       opts.stdout.write(data);
+      try {
+        detector.feed(data);
+      } catch {
+        // Detector failures must never affect pass-through. Swallow and continue.
+      }
     }),
   );
 
@@ -77,6 +88,7 @@ export function runWrapper(opts: RunWrapperOptions): Promise<number> {
           opts.process.off(sig, handler);
         }
         for (const d of disposables) d.dispose();
+        detector.dispose();
         resolve(translateExit(event));
       }),
     );

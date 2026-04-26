@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
+import type { IClaudeDetector } from "./detector/types.js";
 import type { IDisposable, IPty, PtyExit, PtySpawnOptions } from "./pty/types.js";
 import { runWrapper } from "./wrapper.js";
 
@@ -173,5 +174,46 @@ describe("runWrapper", () => {
     expect(stdin.listenerCount("data")).toBe(0);
     expect(proc.listenerCount("SIGINT")).toBe(0);
     expect(proc.listenerCount("SIGWINCH")).toBe(0);
+  });
+
+  it("a throwing detector never blocks pass-through to stdout", async () => {
+    const stdin = makeStdin();
+    const stdout = makeStdout();
+    const proc = new EventEmitter();
+    let captured: MockPty | undefined;
+    const factory = vi.fn((opts: PtySpawnOptions): IPty => {
+      captured = new MockPty(opts);
+      return captured;
+    });
+    const exploding: IClaudeDetector = {
+      feed() {
+        throw new Error("detector boom");
+      },
+      getState() {
+        return "idle";
+      },
+      on() {
+        return { dispose: () => undefined };
+      },
+      dispose() {
+        return undefined;
+      },
+    };
+    const promise = runWrapper({
+      claudeBin: "/fake/claude",
+      argv: [],
+      env: {},
+      cwd: "/tmp",
+      stdin,
+      stdout: stdout as unknown as NodeJS.WriteStream,
+      process: proc as unknown as NodeJS.Process,
+      ptyFactory: factory,
+      detector: exploding,
+    });
+    if (!captured) throw new Error("factory not invoked synchronously");
+    expect(() => captured?.emitData("hello world\n")).not.toThrow();
+    expect(stdout.written.join("")).toBe("hello world\n");
+    captured.emitExit({ exitCode: 0 });
+    await promise;
   });
 });

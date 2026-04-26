@@ -1,0 +1,23 @@
+{
+  "name": "thinking → tool_running → streaming → idle",
+  "description": "Synthetic v1 fixture. Replace with a real PTY recording (`script -q -O`) once 4.13 manual verification produces one; assertions are intentionally state-based, not byte-equivalence.",
+  "debounceMs": 150,
+  "initialState": "idle",
+  "chunks": [
+    { "atMs": 0, "text": "[33m⠋ Thinking…[0m\r", "expectAfter": "thinking" },
+    { "atMs": 100, "text": "[33m⠙ Thinking…[0m\r", "expectAfter": "thinking" },
+    { "atMs": 200, "text": "[2K\rRead(/etc/hosts)\n", "expectAfter": "tool_running" },
+    {
+      "atMs": 300,
+      "text": "Here is the answer.\n\nIt has two lines.\n",
+      "expectAfter": "streaming"
+    },
+    {
+      "atMs": 400,
+      "text": "\n╭──────────────╮\n│ >            │\n╰──────────────╯\n",
+      "expectAfter": "streaming"
+    }
+  ],
+  "settleAfterMs": 500,
+  "finalState": "idle"
+}

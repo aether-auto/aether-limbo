@@ -73,13 +73,13 @@ A **guard** blocks overlay open when state is `idle`.
 - [x] Acceptance: a project with custom hooks, MCP servers, plugins, and
       slash-commands behaves identically under `limbo` vs `claude` *(automated in `test/acceptance.test.ts`: byte-equivalent under `\r`-collapse normalization, exit-code parity verified for both success and failure paths against the live `claude` install)*
 
-### 4.3 Claude state detector
-- [ ] Tee child stdout: one branch to TTY, one to detector (no buffering delay)
-- [ ] States: `idle`, `thinking`, `streaming`, `tool_running`
-- [ ] ANSI heuristics: prompt sigil match, spinner-frame detection, streaming
-      end marker; debounce 150 ms
-- [ ] Emit on internal `EventEmitter`; expose `getState()` for the guard
-- [ ] Replay-test harness: record real PTY sessions, assert classification
+### 4.3 Claude state detector ✓ done
+- [x] Tee child stdout: one branch to TTY, one to detector (no buffering delay) *(synchronous fan-out inside the single `pty.onData` in `wrapper.ts`; detector.feed wrapped in try/catch so it can never affect pass-through)*
+- [x] States: `idle`, `thinking`, `streaming`, `tool_running` *(`src/detector/types.ts`)*
+- [x] ANSI heuristics: prompt sigil match, spinner-frame detection, streaming
+      end marker; debounce 150 ms *(`src/detector/heuristics.ts` via `strip-ansi`; precedence tool > spinner > streaming; 150 ms when prompt sigil visible, 600 ms otherwise)*
+- [x] Emit on internal `EventEmitter`; expose `getState()` for the guard *(`ClaudeStateDetector` in `src/detector/detector.ts`; `on('state', …)` returns disposables)*
+- [x] Replay-test harness: record real PTY sessions, assert classification *(harness in `test/detector-replay.test.ts` reads `.bin` + timeline `.json` and parameterises by scenario name; `scripts/record-pty-fixture.mjs` captures real PTY sessions into the fixture format; `scenario-1` is synthetic, `scenario-2` is a real `claude --help` capture; long-running interactive recording is queued for 4.13)*
 
 ### 4.4 Hotkey interceptor & guard
 - [ ] Default chord `Ctrl+Shift+L`, configurable
@@ -147,6 +147,13 @@ A **guard** blocks overlay open when state is `idle`.
 - [ ] Project with custom hooks/MCP/plugins behaves identically vs `claude`
 - [ ] Resize terminal mid-stream — output stays clean
 - [ ] `Ctrl+C` during streaming cancels the Claude turn, not limbo
+- [ ] Capture a long-running interactive `claude` session (≥1 thinking
+      cycle, ≥1 tool call, idle return) via
+      `node packages/host/scripts/record-pty-fixture.mjs scenario-3 -- claude`,
+      annotate `expectAfter` per chunk (`thinking` / `tool_running` /
+      `streaming` / `idle`), and add `scenario-3` to the parameter list
+      in `test/detector-replay.test.ts` — replaces the synthetic
+      `scenario-1` as the load-bearing detector regression net
 
 ---
 
