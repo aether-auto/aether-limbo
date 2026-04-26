@@ -5,7 +5,6 @@ export interface Filesystem {
   exists(p: string): Promise<boolean>;
   readFile(p: string): Promise<string>;
   writeFile(p: string, content: string): Promise<void>;
-  mkdir(p: string): Promise<void>;
 }
 
 export interface RunResult {
@@ -13,11 +12,7 @@ export interface RunResult {
   readonly stderr?: string;
 }
 
-export type RunCommand = (
-  file: string,
-  args: readonly string[],
-  opts?: { cwd?: string },
-) => Promise<RunResult>;
+export type RunCommand = (file: string, args: readonly string[]) => Promise<RunResult>;
 
 export type BootstrapPhase = "creating-venv" | "installing-package" | "writing-manifest" | "done";
 
@@ -56,6 +51,11 @@ export function computeManifestHash(args: {
 
 const MANIFEST_NAME = ".limbo-manifest.json";
 
+/**
+ * Lazy venv bootstrap for Python sidecars. Uses the Unix venv layout
+ * (`<venvDir>/bin/python` and `bin/pip`); Windows is out of scope per
+ * PLAN.md §5.
+ */
 export class VenvBootstrap {
   constructor(private readonly opts: VenvBootstrapOptions) {}
 

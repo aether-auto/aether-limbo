@@ -15,9 +15,6 @@ function fakeFs(initial: Record<string, string> = {}): Filesystem {
     async writeFile(p, c) {
       files.set(p, c);
     },
-    async mkdir() {
-      /* no-op for in-memory fs */
-    },
   };
 }
 
@@ -150,5 +147,27 @@ describe("VenvBootstrap.ensure", () => {
       onProgress: vi.fn(),
     });
     await expect(v.ensure(["echo"])).rejects.toThrow(/pip|venv/);
+  });
+
+  it("treats a corrupt/unparseable manifest as a cache miss and re-installs", async () => {
+    const fs = fakeFs({
+      "/v/bin/python": "",
+      "/v/.limbo-manifest.json": "NOT-JSON{{{",
+    });
+    const { run, calls } = fakeRun();
+    const v = new VenvBootstrap({
+      venvDir: "/v",
+      pythonExe: "python3",
+      pythonVersion: "3.11.5",
+      packagePath: "/repo/packages/sidecars",
+      fs,
+      run,
+      onProgress: vi.fn(),
+    });
+    await v.ensure(["echo"]);
+    // venv already exists (so no `python -m venv` call), but the corrupt manifest
+    // forces a pip re-install.
+    expect(calls.find((c) => c.includes("install"))).toBeDefined();
+    expect(calls.find((c) => c[0] === "python3" && c.includes("venv"))).toBeUndefined();
   });
 });
