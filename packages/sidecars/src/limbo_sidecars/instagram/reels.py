@@ -100,9 +100,9 @@ def main() -> int:
 
     result = session.validate()
     if result.status == "ready":
-        jsonrpc.notify("body/update", {"text": "logged in"})
+        jsonrpc.notify("body/update", {"lines": ["instagram (reels): logged in"]})
     else:
-        jsonrpc.notify("body/update", {"text": "login required"})
+        jsonrpc.notify("body/update", {"lines": ["instagram (reels): login required"]})
 
     jsonrpc.serve(handlers)
     return 0
