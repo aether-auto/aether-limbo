@@ -914,7 +914,7 @@ Ready to commit: `feat(sidecars): add IGSession with session JSON persistence an
 - Modify: `packages/sidecars/src/limbo_sidecars/__main__.py`
 - Create: `packages/sidecars/tests/test_reels_handlers.py`
 
-- [ ] **Step 1: Write failing test for the handler dispatch shape**
+- [x] **Step 1: Write failing test for the handler dispatch shape**
 
 ```python
 # packages/sidecars/tests/test_reels_handlers.py
@@ -982,7 +982,7 @@ def test_validate_handler_returns_login_required_when_no_session(tmp_path: Path)
     assert out == {"status": "login_required", "message": None}
 ```
 
-- [ ] **Step 2: Run, verify failure**
+- [x] **Step 2: Run, verify failure**
 
 ```bash
 cd packages/sidecars && PYTHONPATH=src python -m pytest tests/test_reels_handlers.py -v
@@ -990,7 +990,7 @@ cd packages/sidecars && PYTHONPATH=src python -m pytest tests/test_reels_handler
 
 Expected: import error.
 
-- [ ] **Step 3: Implement reels module + dispatch**
+- [x] **Step 3: Implement reels module + dispatch**
 
 ```python
 # packages/sidecars/src/limbo_sidecars/instagram/reels.py
@@ -1133,7 +1133,7 @@ if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-- [ ] **Step 4: Run, verify pass**
+- [x] **Step 4: Run, verify pass**
 
 ```bash
 cd packages/sidecars && PYTHONPATH=src python -m pytest tests/test_reels_handlers.py -v
@@ -1141,7 +1141,7 @@ cd packages/sidecars && PYTHONPATH=src python -m pytest tests/test_reels_handler
 
 Expected: 3 tests pass.
 
-- [ ] **Step 5: Stage**
+- [x] **Step 5: Stage**
 
 ```bash
 git add packages/sidecars/src/limbo_sidecars/instagram/reels.py packages/sidecars/src/limbo_sidecars/__main__.py packages/sidecars/tests/test_reels_handlers.py
@@ -1159,7 +1159,7 @@ Ready to commit: `feat(sidecars): add instagram-reels sidecar with login + media
 - Create: `packages/host/src/adapters/instagram/reels-adapter.ts`
 - Create: `packages/host/src/adapters/instagram/reels-adapter.test.ts`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```typescript
 // packages/host/src/adapters/instagram/reels-adapter.test.ts
@@ -1289,7 +1289,7 @@ describe("InstagramReelsAdapter", () => {
 });
 ```
 
-- [ ] **Step 2: Run, verify failure**
+- [x] **Step 2: Run, verify failure**
 
 ```bash
 pnpm --filter @aether/limbo-host test -- reels-adapter
@@ -1297,7 +1297,7 @@ pnpm --filter @aether/limbo-host test -- reels-adapter
 
 Expected: module does not exist.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```typescript
 // packages/host/src/adapters/instagram/reels-adapter.ts
@@ -1461,7 +1461,7 @@ export class InstagramReelsAdapter implements IAdapter {
 }
 ```
 
-- [ ] **Step 4: Run, verify pass**
+- [x] **Step 4: Run, verify pass**
 
 ```bash
 pnpm --filter @aether/limbo-host test -- reels-adapter
@@ -1469,7 +1469,7 @@ pnpm --filter @aether/limbo-host test -- reels-adapter
 
 Expected: 5 tests pass.
 
-- [ ] **Step 5: Stage**
+- [x] **Step 5: Stage**
 
 ```bash
 git add packages/host/src/adapters/instagram/reels-adapter.ts packages/host/src/adapters/instagram/reels-adapter.test.ts
@@ -1491,7 +1491,7 @@ Ready to commit: `feat(host): add InstagramReelsAdapter with login form and medi
 - Test: `packages/host/src/overlay/keymap.test.ts` (extend)
 - Test: `packages/host/src/overlay/overlay.test.ts` (extend)
 
-- [ ] **Step 1: Failing test in keymap.test.ts**
+- [x] **Step 1: Failing test in keymap.test.ts**
 
 ```typescript
 it("emits {kind:'enter'} on \\r and on \\n", () => {
@@ -1501,7 +1501,7 @@ it("emits {kind:'enter'} on \\r and on \\n", () => {
 });
 ```
 
-- [ ] **Step 2: Failing test in overlay.test.ts**
+- [x] **Step 2: Failing test in overlay.test.ts**
 
 ```typescript
 it("routes Enter to the mounted adapter's onEnter", async () => {
@@ -1527,13 +1527,13 @@ it("routes Enter to the mounted adapter's onEnter", async () => {
 });
 ```
 
-- [ ] **Step 3: Verify failures**
+- [x] **Step 3: Verify failures**
 
 ```bash
 pnpm --filter @aether/limbo-host test -- "(keymap|overlay)"
 ```
 
-- [ ] **Step 4: Implement**
+- [x] **Step 4: Implement**
 
 In `overlay/types.ts`, add `| { kind: "enter" }` to `KeyAction`.
 
@@ -1555,13 +1555,13 @@ case "enter":
 ```
 And update the keymap-routing branch in `handleInput` so `enter` does not fall into the `scroll-*` branch.
 
-- [ ] **Step 5: Run, verify pass**
+- [x] **Step 5: Run, verify pass**
 
 ```bash
 pnpm --filter @aether/limbo-host test -- "(keymap|overlay)"
 ```
 
-- [ ] **Step 6: Stage**
+- [x] **Step 6: Stage**
 
 ```bash
 git add packages/host/src/overlay/types.ts packages/host/src/overlay/keymap.ts packages/host/src/overlay/keymap.test.ts packages/host/src/adapters/types.ts packages/host/src/overlay/overlay.ts packages/host/src/overlay/overlay.test.ts
@@ -1581,7 +1581,7 @@ Ready to commit: `feat(overlay): add Enter key action and IAdapter.onEnter hook`
 - Create: `packages/host/src/adapters/instagram/feed-adapter.ts`
 - Create: `packages/host/src/adapters/instagram/feed-adapter.test.ts`
 
-- [ ] **Step 1: Failing pytest for `feed/list` handler**
+- [x] **Step 1: Failing pytest for `feed/list` handler**
 
 ```python
 # packages/sidecars/tests/test_feed_handlers.py
@@ -1627,13 +1627,13 @@ def test_feed_list_returns_serialized_items(tmp_path: Path) -> None:
     }]}
 ```
 
-- [ ] **Step 2: Implement `feed.py`**
+- [x] **Step 2: Implement `feed.py`**
 
 Mirror `reels.py`. The list handler is `feed/list` and pulls from `client.user_feed(...)`. **Cross-check with context7 instagrapi for the actual feed-loading method name** — there is `get_timeline_feed()` (low-level, returns the raw JSON) and adapter helpers; pick whichever returns post objects with `code`, `caption_text`, `user.username`. Adjust the handler to suit.
 
 Write the handler and main analogously to `reels.py`.
 
-- [ ] **Step 3: TS-side `InstagramFeedAdapter`**
+- [x] **Step 3: TS-side `InstagramFeedAdapter`**
 
 Mirror `InstagramReelsAdapter`. Differences:
 - Method names: `feed/list` instead of `media/list`.
@@ -1642,14 +1642,14 @@ Mirror `InstagramReelsAdapter`. Differences:
 
 Write the failing test, run, implement, run again.
 
-- [ ] **Step 4: Run all touched tests**
+- [x] **Step 4: Run all touched tests**
 
 ```bash
 cd packages/sidecars && PYTHONPATH=src python -m pytest tests/test_feed_handlers.py -v
 pnpm --filter @aether/limbo-host test -- feed-adapter
 ```
 
-- [ ] **Step 5: Stage**
+- [x] **Step 5: Stage**
 
 ```bash
 git add packages/sidecars/src/limbo_sidecars/instagram/feed.py packages/sidecars/tests/test_feed_handlers.py packages/host/src/adapters/instagram/feed-adapter.ts packages/host/src/adapters/instagram/feed-adapter.test.ts
@@ -1680,25 +1680,25 @@ Ready to commit: `feat(sidecars,host): add instagram feed adapter (text-only)`
 | `dms/messages` | `{thread_id}` | `{items: [{from, text, ts}]}` |
 | `dms/send` | `{thread_id, text}` | `{ok: bool, message: string \| null}` |
 
-- [ ] **Step 1: pytest** — verify each handler with a fake client (mirrors `reels` / `feed` test shape). **Cross-check method names with context7 instagrapi** (`direct_threads`, `direct_messages`, `direct_send`).
+- [x] **Step 1: pytest** — verify each handler with a fake client (mirrors `reels` / `feed` test shape). **Cross-check method names with context7 instagrapi** (`direct_threads`, `direct_messages`, `direct_send`).
 
-- [ ] **Step 2: Implement `dms.py`** — mirror `reels.py`'s skeleton, adding a thread cache so `dms/messages` can resolve the thread id to a thread object if instagrapi requires the object form.
+- [x] **Step 2: Implement `dms.py`** — mirror `reels.py`'s skeleton, adding a thread cache so `dms/messages` can resolve the thread id to a thread object if instagrapi requires the object form.
 
-- [ ] **Step 3: Failing TS test** — verify mode transitions (list → detail → input → send) and that `captureInput` is true only in input mode.
+- [x] **Step 3: Failing TS test** — verify mode transitions (list → detail → input → send) and that `captureInput` is true only in input mode.
 
-- [ ] **Step 4: Implement `InstagramDmsAdapter`** with three modes: `"threads"`, `"messages"`, `"input"`. Key bindings inside the adapter (handled via `handleKey` for nav and `captureInput` for input mode):
+- [x] **Step 4: Implement `InstagramDmsAdapter`** with three modes: `"threads"`, `"messages"`, `"input"`. Key bindings inside the adapter (handled via `handleKey` for nav and `captureInput` for input mode):
   - `threads` mode: `j/k` move selection, Enter → load `dms/messages`, switch to `messages`.
   - `messages` mode: `j/k` scroll, `i` → switch to `input` (set internal `inputBuffer = ""`), Esc → back to `threads`.
   - `input` mode: `captureInput` returns `true` and accumulates printable chars; backspace deletes; Enter dispatches `dms/send` and switches back to `messages` on success.
 
-- [ ] **Step 5: Run all DM tests**
+- [x] **Step 5: Run all DM tests**
 
 ```bash
 cd packages/sidecars && PYTHONPATH=src python -m pytest tests/test_dms_handlers.py -v
 pnpm --filter @aether/limbo-host test -- dms-adapter
 ```
 
-- [ ] **Step 6: Stage**
+- [x] **Step 6: Stage**
 
 ```bash
 git add packages/sidecars/src/limbo_sidecars/instagram/dms.py packages/sidecars/tests/test_dms_handlers.py packages/host/src/adapters/instagram/dms-adapter.ts packages/host/src/adapters/instagram/dms-adapter.test.ts
@@ -1717,7 +1717,7 @@ Ready to commit: `feat(sidecars,host): add instagram dms adapter with reply inpu
 - Modify: `packages/host/src/wrapper.ts` — register descriptors + carbonyl bin resolution
 - Test: `packages/host/src/wrapper.test.ts` (extend with a mounted-tab assertion using a fake registry)
 
-- [ ] **Step 1: Update `DEFAULT_TABS`**
+- [x] **Step 1: Update `DEFAULT_TABS`**
 
 ```typescript
 // overlay/types.ts
@@ -1730,7 +1730,7 @@ export const DEFAULT_TABS: readonly TabDefinition[] = [
 ];
 ```
 
-- [ ] **Step 2: Update `defaultRegistry` in `wrapper.ts`**
+- [x] **Step 2: Update `defaultRegistry` in `wrapper.ts`**
 
 ```typescript
 function defaultRegistry(opts: { env: NodeJS.ProcessEnv; cwd: string }): IAdapterRegistry {
@@ -1774,7 +1774,7 @@ function defaultRegistry(opts: { env: NodeJS.ProcessEnv; cwd: string }): IAdapte
 
 `OVERLAY_REF` is a `{ current: IOverlayController | undefined }` closure-scoped object the wrapper assigns after constructing the overlay. The closure-via-mutable-cell is the cleanest workaround for the registry-needs-overlay-needs-registry cycle.
 
-- [ ] **Step 3: Failing wrapper test**
+- [x] **Step 3: Failing wrapper test**
 
 ```typescript
 it("registers instagram-reels/feed/dms adapters with extras=['instagram']", () => {
@@ -1791,13 +1791,13 @@ it("registers instagram-reels/feed/dms adapters with extras=['instagram']", () =
 
 (Expose `defaultRegistry` for testing if it isn't exported — guard the test export with `// @internal`.)
 
-- [ ] **Step 4: Run, verify pass**
+- [x] **Step 4: Run, verify pass**
 
 ```bash
 pnpm --filter @aether/limbo-host test -- wrapper
 ```
 
-- [ ] **Step 5: Stage**
+- [x] **Step 5: Stage**
 
 ```bash
 git add packages/host/src/overlay/types.ts packages/host/src/wrapper.ts packages/host/src/wrapper.test.ts
@@ -1814,11 +1814,11 @@ Ready to commit: `feat(host): wire instagram adapters into default registry with
 **Files:**
 - Modify: `PLAN.md`
 
-- [ ] **Step 1: Check off §4.7**
+- [x] **Step 1: Check off §4.7**
 
 Replace the four `- [ ]` lines under §4.7 with `- [x]` and append a one-paragraph "done" note describing where each capability lives (matches the §4.6 commit-message style).
 
-- [ ] **Step 2: Append D15-D19 to §5.1 deferred-work table**
+- [x] **Step 2: Append D15-D19 to §5.1 deferred-work table**
 
 | # | Item | Origin | Target section | Blocked on | Rationale |
 |---|------|--------|----------------|------------|-----------|
@@ -1832,7 +1832,7 @@ Mark D13 row's status: change "Blocked on: The first real adapter" to "**Resolve
 
 Mark D11 row: append "Partially superseded by D15 (rich rendering for thumbnails); D11 itself stays open for the broader sub-pane case."
 
-- [ ] **Step 3: Stage**
+- [x] **Step 3: Stage**
 
 ```bash
 git add PLAN.md
@@ -1846,7 +1846,7 @@ Ready to commit: `docs(plan): mark §4.7 done; record D15-D19 in §5.1 deferred-
 
 **Goal:** Run the entire host test suite and the opt-in Python contract test if `python3` + `instagrapi` happen to be installed locally. Report numbers.
 
-- [ ] **Step 1: Full host test run**
+- [x] **Step 1: Full host test run**
 
 ```bash
 pnpm --filter @aether/limbo-host test
@@ -1854,7 +1854,7 @@ pnpm --filter @aether/limbo-host test
 
 Report the pass count. The §4.6 baseline was 194 passing + 2 skipped — §4.7 should add ≥30 new tests (3 per adapter × 5-7 cases each + login form + carbonyl + overlay extensions).
 
-- [ ] **Step 2: Optional Python contract test (if env permits)**
+- [x] **Step 2: Optional Python contract test (if env permits)**
 
 ```bash
 LIMBO_RUN_PYTHON_TESTS=1 pnpm --filter @aether/limbo-host test -- adapter-roundtrip
@@ -1862,7 +1862,7 @@ LIMBO_RUN_PYTHON_TESTS=1 pnpm --filter @aether/limbo-host test -- adapter-roundt
 
 If `instagrapi` is not installed in the test environment, this step is skipped; document the skip.
 
-- [ ] **Step 3: Manual one-shot smoke (if `claude` and an IG account are available)**
+- [x] **Step 3: Manual one-shot smoke (if `claude` and an IG account are available)**
 
 ```bash
 limbo
