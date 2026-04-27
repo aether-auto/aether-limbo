@@ -17,6 +17,10 @@ def main() -> int:
         from .instagram import reels
 
         return reels.main()
+    if name == "instagram-feed":
+        from .instagram import feed
+
+        return feed.main()
     sys.stderr.write(f"unknown adapter: {name}\n")
     return 64
 
