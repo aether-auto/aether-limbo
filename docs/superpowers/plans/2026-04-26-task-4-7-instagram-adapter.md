@@ -105,7 +105,7 @@ packages/sidecars/pyproject.toml                    # already declares `instagra
 - Modify: `packages/host/src/overlay/overlay.ts`
 - Test: `packages/host/src/overlay/overlay.test.ts` (extend)
 
-- [ ] **Step 1: Write the failing test in `overlay.test.ts`**
+- [x] **Step 1: Write the failing test in `overlay.test.ts`**
 
 ```typescript
 // packages/host/src/overlay/overlay.test.ts — append a new describe block
@@ -185,7 +185,7 @@ describe("LimboOverlay raw input capture", () => {
 });
 ```
 
-- [ ] **Step 2: Run, verify failure**
+- [x] **Step 2: Run, verify failure**
 
 ```bash
 pnpm --filter @aether/limbo-host test -- overlay
@@ -193,7 +193,7 @@ pnpm --filter @aether/limbo-host test -- overlay
 
 Expected: `captureInput` is not a property of `IAdapter` — TypeScript compile error first, then runtime expectation failure.
 
-- [ ] **Step 3: Add `captureInput` to `IAdapter`**
+- [x] **Step 3: Add `captureInput` to `IAdapter`**
 
 ```typescript
 // packages/host/src/adapters/types.ts — add to IAdapter
@@ -212,7 +212,7 @@ export interface IAdapter {
 }
 ```
 
-- [ ] **Step 4: Route raw input through it in `overlay.ts`**
+- [x] **Step 4: Route raw input through it in `overlay.ts`**
 
 ```typescript
 // packages/host/src/overlay/overlay.ts — replace the existing handleInput
@@ -224,15 +224,16 @@ handleInput(chunk: string): void {
 }
 ```
 
-- [ ] **Step 5: Run, verify pass**
+- [x] **Step 5: Run, verify pass**
 
 ```bash
 pnpm --filter @aether/limbo-host test -- overlay
 ```
 
 Expected: all overlay tests pass, including the three new ones.
+Actual: 38 overlay tests pass; full host suite 199 passing + 2 skipped (was 196 + 2 in §4.6 baseline → +3 new tests).
 
-- [ ] **Step 6: Stage**
+- [x] **Step 6: Stage**
 
 ```bash
 git add packages/host/src/adapters/types.ts packages/host/src/overlay/overlay.ts packages/host/src/overlay/overlay.test.ts

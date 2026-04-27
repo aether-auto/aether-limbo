@@ -77,6 +77,7 @@ export class LimboOverlay implements IOverlayController {
 
   handleInput(chunk: string): void {
     if (!this.open_ || chunk.length === 0) return;
+    if (this.mounted?.adapter.captureInput?.(chunk) === true) return;
     const actions = this.keymap.feed(chunk);
     if (actions.length === 0) return;
     let needsFullRepaint = false;

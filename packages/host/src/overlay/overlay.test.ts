@@ -389,3 +389,81 @@ describe("LimboOverlay adapter integration", () => {
     expect(adapter.unmountCalls).toBe(1);
   });
 });
+
+describe("LimboOverlay captureInput seam", () => {
+  it("routes raw input to adapter.captureInput before the keymap (chunk consumed, overlay stays open)", async () => {
+    const detector = new FakeDetector();
+    const stdout = makeStdout();
+    let captured: string | undefined;
+    const capturingAdapter: IAdapter = {
+      id: "rec",
+      async mount(_pane: IPane): Promise<void> {},
+      async unmount(): Promise<void> {},
+      handleKey(): void {},
+      captureInput(chunk: string): boolean {
+        captured = chunk;
+        return true; // consume — keymap must NOT see this
+      },
+    };
+    const overlay = new LimboOverlay({
+      stdout,
+      detector,
+      registry: { get: () => capturingAdapter, list: () => [] },
+      tabs: [{ id: "__echo", label: "Echo", placeholderRef: "§4.7", adapterId: "rec" }],
+    });
+    overlay.open();
+    await Promise.resolve();
+    await Promise.resolve();
+    overlay.handleInput("q"); // 'q' would normally close via keymap
+    expect(captured).toBe("q");
+    expect(overlay.isOpen()).toBe(true); // keymap was bypassed
+  });
+
+  it("falls back to keymap when captureInput returns false (q must close)", async () => {
+    const detector = new FakeDetector();
+    const stdout = makeStdout();
+    const passthroughAdapter: IAdapter = {
+      id: "rec",
+      async mount(_pane: IPane): Promise<void> {},
+      async unmount(): Promise<void> {},
+      handleKey(): void {},
+      captureInput(_chunk: string): boolean {
+        return false; // do NOT consume — let keymap handle it
+      },
+    };
+    const overlay = new LimboOverlay({
+      stdout,
+      detector,
+      registry: { get: () => passthroughAdapter, list: () => [] },
+      tabs: [{ id: "__echo", label: "Echo", placeholderRef: "§4.7", adapterId: "rec" }],
+    });
+    overlay.open();
+    await Promise.resolve();
+    await Promise.resolve();
+    overlay.handleInput("q");
+    expect(overlay.isOpen()).toBe(false); // keymap closed it
+  });
+
+  it("adapters without captureInput keep current behavior (q must close)", async () => {
+    const detector = new FakeDetector();
+    const stdout = makeStdout();
+    // Deliberately no captureInput field
+    const plainAdapter: IAdapter = {
+      id: "rec",
+      async mount(_pane: IPane): Promise<void> {},
+      async unmount(): Promise<void> {},
+      handleKey(): void {},
+    };
+    const overlay = new LimboOverlay({
+      stdout,
+      detector,
+      registry: { get: () => plainAdapter, list: () => [] },
+      tabs: [{ id: "__echo", label: "Echo", placeholderRef: "§4.7", adapterId: "rec" }],
+    });
+    overlay.open();
+    await Promise.resolve();
+    await Promise.resolve();
+    overlay.handleInput("q");
+    expect(overlay.isOpen()).toBe(false); // keymap closed it as normal
+  });
+});

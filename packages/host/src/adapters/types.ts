@@ -15,6 +15,12 @@ export interface IAdapter {
   mount(pane: IPane): Promise<void>;
   unmount(): Promise<void>;
   handleKey(action: KeyAction): void;
+  /**
+   * Called with the raw stdin chunk before the overlay's keymap processes it.
+   * Return `true` to consume the chunk; `false` to fall through to the overlay's keymap.
+   * Adapters that do not implement this method receive unchanged keymap behaviour.
+   */
+  captureInput?(chunk: string): boolean;
 }
 
 export interface AdapterDescriptor {
