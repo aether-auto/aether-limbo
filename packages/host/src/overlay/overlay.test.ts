@@ -333,4 +333,59 @@ describe("LimboOverlay adapter integration", () => {
     overlay.open();
     expect(stdout.buffer.join("")).toContain("adapter not yet implemented");
   });
+
+  it("force-unmounts an adapter whose mount() resolves AFTER close() runs (open/close race)", async () => {
+    // SlowAdapter pauses inside mount() on an external resume signal so we can
+    // call close() between mount-entry and mount-completion.
+    class SlowAdapter implements IAdapter {
+      readonly id = "rec";
+      mountCalls = 0;
+      unmountCalls = 0;
+      readonly entered: Promise<void>;
+      private signalEntered: () => void = () => undefined;
+      readonly resume: Promise<void>;
+      private signalResume: () => void = () => undefined;
+      constructor() {
+        this.entered = new Promise<void>((r) => {
+          this.signalEntered = r;
+        });
+        this.resume = new Promise<void>((r) => {
+          this.signalResume = r;
+        });
+      }
+      async mount(_pane: IPane): Promise<void> {
+        this.mountCalls++;
+        this.signalEntered();
+        await this.resume;
+      }
+      async unmount(): Promise<void> {
+        this.unmountCalls++;
+      }
+      handleKey(): void {
+        /* unused */
+      }
+      release(): void {
+        this.signalResume();
+      }
+    }
+
+    const detector = new FakeDetector();
+    const stdout = makeStdout();
+    const adapter = new SlowAdapter();
+    const overlay = new LimboOverlay({
+      stdout,
+      detector,
+      registry: registryWith(adapter),
+      tabs: [{ id: "__echo", label: "Echo", placeholderRef: "§4.6", adapterId: "rec" }],
+    });
+    overlay.open();
+    await adapter.entered; // mount has run up to its await
+    overlay.close(); // close runs while mount is suspended
+    adapter.release(); // mount completes
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(adapter.mountCalls).toBe(1);
+    expect(adapter.unmountCalls).toBe(1);
+  });
 });

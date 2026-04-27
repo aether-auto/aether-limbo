@@ -90,4 +90,20 @@ describe("ChildProcessTransport", () => {
     t.close();
     expect(child.killSignal).toBe("SIGTERM");
   });
+
+  it("treats child 'error' (e.g., python3 not on PATH) as a transport exit", () => {
+    const child = new FakeChild();
+    const spawn: SpawnLike = () => child as unknown as ReturnType<SpawnLike>;
+    const t = new ChildProcessTransport({
+      pythonExe: "/v/bin/python",
+      args: [],
+      env: {},
+      cwd: "/",
+      spawn,
+    });
+    const exits: Array<{ code: number | null; signal: string | null }> = [];
+    t.onExit((e) => exits.push(e));
+    child.emit("error", new Error("ENOENT: spawn python3"));
+    expect(exits).toEqual([{ code: null, signal: null }]);
+  });
 });

@@ -12,6 +12,9 @@ build/
 .idea/
 .vscode/
 
+# OMC plugin tooling state (project memory, session caches)
+**/.omc/
+
 # --- Python ---
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -31,6 +31,15 @@ export class ChildProcessTransport implements ITransport {
       const ex: TransportExit = { code, signal };
       for (const l of this.exitListeners) l(ex);
     });
+    // spawn() does not throw synchronously when the executable is missing —
+    // it returns a child that fires "error" with ENOENT. Without a listener
+    // Node prints an unhandled-error warning and the JsonRpcClient hangs
+    // because it only watches "exit". Treat error like an exit so pending
+    // requests reject cleanly.
+    this.child.on("error", () => {
+      const ex: TransportExit = { code: null, signal: null };
+      for (const l of this.exitListeners) l(ex);
+    });
   }
 
   write(chunk: string): void {

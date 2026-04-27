@@ -208,6 +208,18 @@ export class LimboOverlay implements IOverlayController {
       await adapter.mount(pane);
     } catch {
       this.mounted = undefined;
+      return;
+    }
+    // If close() ran while we were awaiting mount, the overlay is no longer
+    // visible — tear the adapter back down so the child process is not orphaned.
+    if (!this.open_) {
+      const m = this.mounted;
+      this.mounted = undefined;
+      try {
+        await m?.adapter.unmount();
+      } catch {
+        // teardown failures during close-race recovery must not throw
+      }
     }
   }
 
