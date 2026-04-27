@@ -3,8 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import type { IClaudeDetector } from "./detector/types.js";
 import { NullOverlayController } from "./hotkey/overlay-stub.js";
 import type { IHotkeyInterceptor, IOverlayController } from "./hotkey/types.js";
+import { DEFAULT_TABS } from "./overlay/types.js";
 import type { IDisposable, IPty, PtyExit, PtySpawnOptions } from "./pty/types.js";
-import { runWrapper } from "./wrapper.js";
+import { _defaultRegistryForTest, runWrapper } from "./wrapper.js";
 
 class MockPty implements IPty {
   pid = 4242;
@@ -506,5 +507,37 @@ describe("runWrapper", () => {
     expect(stdout.written.join("")).not.toContain(" Echo ");
     pty.emitExit({ exitCode: 0 });
     await promise;
+  });
+});
+
+describe("defaultRegistry", () => {
+  it("lists four adapter ids in order: instagram-reels, instagram-feed, instagram-dms, echo", () => {
+    const registry = _defaultRegistryForTest({ PATH: "/usr/bin" }, "/tmp");
+    const ids = registry.list().map((d) => d.id);
+    expect(ids).toEqual(["instagram-reels", "instagram-feed", "instagram-dms", "echo"]);
+  });
+
+  it("all instagram-* descriptors have extras: [\"instagram\"]", () => {
+    const registry = _defaultRegistryForTest({ PATH: "/usr/bin" }, "/tmp");
+    const igDescriptors = registry.list().filter((d) => d.id.startsWith("instagram-"));
+    expect(igDescriptors).toHaveLength(3);
+    for (const d of igDescriptors) {
+      expect(d.extras).toEqual(["instagram"]);
+    }
+  });
+
+  it("the echo descriptor has extras: []", () => {
+    const registry = _defaultRegistryForTest({ PATH: "/usr/bin" }, "/tmp");
+    const echo = registry.list().find((d) => d.id === "echo");
+    expect(echo).toBeDefined();
+    expect(echo?.extras).toEqual([]);
+  });
+});
+
+describe("DEFAULT_TABS", () => {
+  it("the first three default tabs bind to instagram adapter ids", () => {
+    expect(DEFAULT_TABS[0]?.adapterId).toBe("instagram-reels");
+    expect(DEFAULT_TABS[1]?.adapterId).toBe("instagram-feed");
+    expect(DEFAULT_TABS[2]?.adapterId).toBe("instagram-dms");
   });
 });

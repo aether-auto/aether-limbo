@@ -1,5 +1,9 @@
 import { spawn as nodeSpawn } from "node:child_process";
+import { runDetached } from "./adapters/carbonyl.js";
 import { EchoAdapter } from "./adapters/echo-adapter.js";
+import { InstagramDmsAdapter } from "./adapters/instagram/dms-adapter.js";
+import { InstagramFeedAdapter } from "./adapters/instagram/feed-adapter.js";
+import { InstagramReelsAdapter } from "./adapters/instagram/reels-adapter.js";
 import { BuiltinAdapterRegistry } from "./adapters/registry.js";
 import { JsonRpcClient } from "./adapters/rpc/client.js";
 import { ChildProcessTransport } from "./adapters/sidecar/child-transport.js";
@@ -51,7 +55,79 @@ type ForwardedSignal = (typeof FORWARDED_SIGNALS)[number];
 const DEFAULT_COLS = 80;
 const DEFAULT_ROWS = 24;
 
-function defaultRegistry(opts: { env: NodeJS.ProcessEnv; cwd: string }): IAdapterRegistry {
+interface OverlayRef {
+  current: IOverlayController | undefined;
+}
+
+function defaultRegistry(opts: {
+  env: NodeJS.ProcessEnv;
+  cwd: string;
+  overlayRef: OverlayRef;
+}): IAdapterRegistry {
+  const carbonylBin = opts.env.LIMBO_CARBONYL_BIN ?? "carbonyl";
+
+  const makeRunDetached = (): ((url: string) => Promise<void>) => {
+    return (url: string): Promise<void> => {
+      const overlay = opts.overlayRef.current;
+      if (!overlay) return Promise.resolve();
+      return runDetached({ url, overlay, spawn: nodeSpawn, carbonylBin });
+    };
+  };
+
+  const igReels: AdapterDescriptor = {
+    id: "instagram-reels",
+    extras: ["instagram"],
+    enabled: true,
+    create: (): IAdapter => {
+      const transport = new ChildProcessTransport({
+        pythonExe: "python3",
+        args: ["-m", "limbo_sidecars", "instagram-reels"],
+        env: opts.env,
+        cwd: opts.cwd,
+        spawn: nodeSpawn,
+      });
+      return new InstagramReelsAdapter({
+        client: new JsonRpcClient(transport),
+        runDetached: makeRunDetached(),
+      });
+    },
+  };
+
+  const igFeed: AdapterDescriptor = {
+    id: "instagram-feed",
+    extras: ["instagram"],
+    enabled: true,
+    create: (): IAdapter => {
+      const transport = new ChildProcessTransport({
+        pythonExe: "python3",
+        args: ["-m", "limbo_sidecars", "instagram-feed"],
+        env: opts.env,
+        cwd: opts.cwd,
+        spawn: nodeSpawn,
+      });
+      return new InstagramFeedAdapter({
+        client: new JsonRpcClient(transport),
+        runDetached: makeRunDetached(),
+      });
+    },
+  };
+
+  const igDms: AdapterDescriptor = {
+    id: "instagram-dms",
+    extras: ["instagram"],
+    enabled: true,
+    create: (): IAdapter => {
+      const transport = new ChildProcessTransport({
+        pythonExe: "python3",
+        args: ["-m", "limbo_sidecars", "instagram-dms"],
+        env: opts.env,
+        cwd: opts.cwd,
+        spawn: nodeSpawn,
+      });
+      return new InstagramDmsAdapter({ client: new JsonRpcClient(transport) });
+    },
+  };
+
   const echoDescriptor: AdapterDescriptor = {
     id: "echo",
     extras: [],
@@ -67,7 +143,13 @@ function defaultRegistry(opts: { env: NodeJS.ProcessEnv; cwd: string }): IAdapte
       return new EchoAdapter({ client: new JsonRpcClient(transport) });
     },
   };
-  return new BuiltinAdapterRegistry([echoDescriptor]);
+
+  return new BuiltinAdapterRegistry([igReels, igFeed, igDms, echoDescriptor]);
+}
+
+// @internal — test seam only; not part of the public API
+export function _defaultRegistryForTest(env: NodeJS.ProcessEnv, cwd: string): IAdapterRegistry {
+  return defaultRegistry({ env, cwd, overlayRef: { current: undefined } });
 }
 
 function defaultTabs(env: NodeJS.ProcessEnv): readonly TabDefinition[] {
@@ -96,8 +178,9 @@ export function runWrapper(opts: RunWrapperOptions): Promise<number> {
   const detector: IClaudeDetector = opts.detector ?? new ClaudeStateDetector();
   opts.onDetector?.(detector);
 
+  const overlayRef: OverlayRef = { current: undefined };
   const registry: IAdapterRegistry =
-    opts.adapterRegistry ?? defaultRegistry({ env: opts.env, cwd: opts.cwd });
+    opts.adapterRegistry ?? defaultRegistry({ env: opts.env, cwd: opts.cwd, overlayRef });
   const tabs: readonly TabDefinition[] = opts.tabs ?? defaultTabs(opts.env);
 
   const overlay: IOverlayController =
@@ -110,6 +193,7 @@ export function runWrapper(opts: RunWrapperOptions): Promise<number> {
       ...(opts.chord !== undefined ? { chord: opts.chord } : {}),
     });
   opts.onOverlay?.(overlay);
+  overlayRef.current = overlay;
 
   const interceptor: IHotkeyInterceptor =
     opts.interceptor ??
