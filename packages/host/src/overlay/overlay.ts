@@ -136,6 +136,9 @@ export class LimboOverlay implements IOverlayController {
         if (this.activeIndex === action.index) return false;
         this.activeIndex = action.index;
         return true;
+      case "enter":
+        this.mounted?.adapter.onEnter?.();
+        return false;
       case "scroll-up":
       case "scroll-down":
       case "scroll-top":

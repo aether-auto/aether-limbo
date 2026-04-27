@@ -8,6 +8,10 @@ export class OverlayKeymap {
     for (let i = 0; i < chunk.length; i++) {
       const ch = chunk[i];
       if (ch === undefined) continue;
+      if (ch === "\r" || ch === "\n") {
+        actions.push({ kind: "enter" });
+        continue;
+      }
       if (this.pendingG) {
         this.pendingG = false;
         if (ch === "g") {

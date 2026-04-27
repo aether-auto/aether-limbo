@@ -46,7 +46,22 @@ describe("OverlayKeymap", () => {
 
   it("silently drops unmapped keys", () => {
     const km = new OverlayKeymap();
-    expect(km.feed("xyz!?\r\n")).toEqual([]);
+    expect(km.feed("xyz!?")).toEqual([]);
+  });
+
+  it("emits {kind:'enter'} on \\r", () => {
+    const k = new OverlayKeymap();
+    expect(k.feed("\r")).toEqual([{ kind: "enter" }]);
+  });
+
+  it("emits {kind:'enter'} on \\n", () => {
+    const k = new OverlayKeymap();
+    expect(k.feed("\n")).toEqual([{ kind: "enter" }]);
+  });
+
+  it("multiple enters in one chunk emit multiple enter actions", () => {
+    const k = new OverlayKeymap();
+    expect(k.feed("\r\n\r")).toEqual([{ kind: "enter" }, { kind: "enter" }, { kind: "enter" }]);
   });
 
   it("reset() clears the pending-g buffer", () => {

@@ -27,7 +27,8 @@ export type KeyAction =
   | { kind: "scroll-up" }
   | { kind: "scroll-down" }
   | { kind: "scroll-top" }
-  | { kind: "scroll-bottom" };
+  | { kind: "scroll-bottom" }
+  | { kind: "enter" };
 
 export interface KeymapResult {
   readonly actions: readonly KeyAction[];

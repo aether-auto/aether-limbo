@@ -21,6 +21,8 @@ export interface IAdapter {
    * Adapters that do not implement this method receive unchanged keymap behaviour.
    */
   captureInput?(chunk: string): boolean;
+  /** Called when the user presses Enter while this adapter is mounted. */
+  onEnter?(): void;
 }
 
 export interface AdapterDescriptor {

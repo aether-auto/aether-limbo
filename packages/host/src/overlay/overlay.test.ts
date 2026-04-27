@@ -390,6 +390,55 @@ describe("LimboOverlay adapter integration", () => {
   });
 });
 
+describe("LimboOverlay enter routing", () => {
+  it("routes Enter keypress to mounted adapter.onEnter", async () => {
+    const onEnter = vi.fn();
+    const fake: IAdapter = {
+      id: "ig",
+      mount: async () => undefined,
+      unmount: async () => undefined,
+      handleKey: () => undefined,
+      onEnter,
+    };
+    const registry: IAdapterRegistry = { get: () => fake, list: () => [] };
+    const stdout = makeStdout();
+    const detector = new FakeDetector();
+    const overlay = new LimboOverlay({
+      stdout,
+      detector,
+      registry,
+      tabs: [{ id: "reels", label: "Reels", placeholderRef: "§4.7", adapterId: "ig" }],
+    });
+    overlay.open();
+    await Promise.resolve();
+    overlay.handleInput("\r");
+    expect(onEnter).toHaveBeenCalledOnce();
+    expect(overlay.isOpen()).toBe(true); // Enter does NOT close the overlay
+  });
+
+  it("Enter on adapter without onEnter does nothing (no throw, overlay stays open)", async () => {
+    const fake: IAdapter = {
+      id: "ig",
+      mount: async () => undefined,
+      unmount: async () => undefined,
+      handleKey: () => undefined,
+    };
+    const registry: IAdapterRegistry = { get: () => fake, list: () => [] };
+    const stdout = makeStdout();
+    const detector = new FakeDetector();
+    const overlay = new LimboOverlay({
+      stdout,
+      detector,
+      registry,
+      tabs: [{ id: "reels", label: "Reels", placeholderRef: "§4.7", adapterId: "ig" }],
+    });
+    overlay.open();
+    await Promise.resolve();
+    expect(() => overlay.handleInput("\r")).not.toThrow();
+    expect(overlay.isOpen()).toBe(true);
+  });
+});
+
 describe("LimboOverlay captureInput seam", () => {
   it("routes raw input to adapter.captureInput before the keymap (chunk consumed, overlay stays open)", async () => {
     const detector = new FakeDetector();
