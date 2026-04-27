@@ -21,6 +21,10 @@ def main() -> int:
         from .instagram import feed
 
         return feed.main()
+    if name == "instagram-dms":
+        from .instagram import dms
+
+        return dms.main()
     sys.stderr.write(f"unknown adapter: {name}\n")
     return 64
 
