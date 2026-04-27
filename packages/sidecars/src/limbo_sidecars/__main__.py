@@ -13,6 +13,10 @@ def main() -> int:
         from . import echo
 
         return echo.main()
+    if name == "instagram-reels":
+        from .instagram import reels
+
+        return reels.main()
     sys.stderr.write(f"unknown adapter: {name}\n")
     return 64
 
