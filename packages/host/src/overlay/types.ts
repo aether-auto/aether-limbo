@@ -15,7 +15,7 @@ export const DEFAULT_TABS: readonly TabDefinition[] = [
   { id: "reels", label: "Reels", placeholderRef: "§4.7", adapterId: "instagram-reels" },
   { id: "feed", label: "Feed", placeholderRef: "§4.7", adapterId: "instagram-feed" },
   { id: "dms", label: "DMs", placeholderRef: "§4.7", adapterId: "instagram-dms" },
-  { id: "x", label: "X", placeholderRef: "§4.8" },
+  { id: "x", label: "X", placeholderRef: "§4.8", adapterId: "twitter-home" },
   { id: "tiktok", label: "TikTok", placeholderRef: "§4.9" },
 ];
 

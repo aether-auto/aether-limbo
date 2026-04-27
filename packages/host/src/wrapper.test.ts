@@ -511,13 +511,19 @@ describe("runWrapper", () => {
 });
 
 describe("defaultRegistry", () => {
-  it("lists four adapter ids in order: instagram-reels, instagram-feed, instagram-dms, echo", () => {
+  it("lists adapter ids in order: instagram-reels, instagram-feed, instagram-dms, twitter-home, echo", () => {
     const registry = _defaultRegistryForTest({ PATH: "/usr/bin" }, "/tmp");
     const ids = registry.list().map((d) => d.id);
-    expect(ids).toEqual(["instagram-reels", "instagram-feed", "instagram-dms", "echo"]);
+    expect(ids).toEqual([
+      "instagram-reels",
+      "instagram-feed",
+      "instagram-dms",
+      "twitter-home",
+      "echo",
+    ]);
   });
 
-  it("all instagram-* descriptors have extras: [\"instagram\"]", () => {
+  it('all instagram-* descriptors have extras: ["instagram"]', () => {
     const registry = _defaultRegistryForTest({ PATH: "/usr/bin" }, "/tmp");
     const igDescriptors = registry.list().filter((d) => d.id.startsWith("instagram-"));
     expect(igDescriptors).toHaveLength(3);

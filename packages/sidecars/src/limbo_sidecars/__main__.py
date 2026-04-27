@@ -25,6 +25,10 @@ def main() -> int:
         from .instagram import dms
 
         return dms.main()
+    if name == "twitter-home":
+        from .twitter import home
+
+        return home.main()
     sys.stderr.write(f"unknown adapter: {name}\n")
     return 64
 

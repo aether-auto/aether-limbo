@@ -7,6 +7,7 @@ import { InstagramReelsAdapter } from "./adapters/instagram/reels-adapter.js";
 import { BuiltinAdapterRegistry } from "./adapters/registry.js";
 import { JsonRpcClient } from "./adapters/rpc/client.js";
 import { ChildProcessTransport } from "./adapters/sidecar/child-transport.js";
+import { TwitterHomeAdapter } from "./adapters/twitter/home-adapter.js";
 import type { AdapterDescriptor, IAdapter, IAdapterRegistry } from "./adapters/types.js";
 import { ClaudeStateDetector } from "./detector/detector.js";
 import type { IClaudeDetector } from "./detector/types.js";
@@ -128,6 +129,25 @@ function defaultRegistry(opts: {
     },
   };
 
+  const twitterHome: AdapterDescriptor = {
+    id: "twitter-home",
+    extras: ["twitter"],
+    enabled: true,
+    create: (): IAdapter => {
+      const transport = new ChildProcessTransport({
+        pythonExe: "python3",
+        args: ["-m", "limbo_sidecars", "twitter-home"],
+        env: opts.env,
+        cwd: opts.cwd,
+        spawn: nodeSpawn,
+      });
+      return new TwitterHomeAdapter({
+        client: new JsonRpcClient(transport),
+        runDetached: makeRunDetached(),
+      });
+    },
+  };
+
   const echoDescriptor: AdapterDescriptor = {
     id: "echo",
     extras: [],
@@ -144,7 +164,7 @@ function defaultRegistry(opts: {
     },
   };
 
-  return new BuiltinAdapterRegistry([igReels, igFeed, igDms, echoDescriptor]);
+  return new BuiltinAdapterRegistry([igReels, igFeed, igDms, twitterHome, echoDescriptor]);
 }
 
 // @internal — test seam only; not part of the public API
