@@ -16,9 +16,14 @@ Early scaffolding. See [PLAN.md](./PLAN.md) for the full roadmap.
 | --- | --- |
 | §4.1 Project scaffolding | done |
 | §4.2 Transparent PTY wrapper | done |
-| §4.3 State detector | not started |
-| §4.4 Hotkey + guard | not started |
-| §4.5–4.9 Overlay & adapters | not started |
+| §4.3 State detector | done |
+| §4.4 Hotkey + guard | done |
+| §4.5 Overlay shell | done |
+| §4.6 Adapter layer | done |
+| §4.7 Instagram adapter | done |
+| §4.8 X / Twitter adapter | done |
+| §4.9 TikTok adapter | done |
+| §4.10 Auto-switch back | not started |
 
 ## Install
 
