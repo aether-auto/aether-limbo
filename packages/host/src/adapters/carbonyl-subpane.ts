@@ -28,8 +28,8 @@ export interface CarbonylSubpaneOptions {
 
 // Matches: CSI <r>;<c> H|f  (CUP / HVP), CSI <r> d (VPA), bare CSI H, CSI 2J
 // We process the string character by character via regex replace.
-const CSI_ABSOLUTE_RE =
-  /\x1b\[(\d*);(\d*)([Hf])|\x1b\[(\d+)d|\x1b\[H|\x1b\[2J/g;
+// biome-ignore lint/suspicious/noControlCharactersInRegex: matching ANSI ESC introducer is the whole point
+const CSI_ABSOLUTE_RE = /\x1b\[(\d*);(\d*)([Hf])|\x1b\[(\d+)d|\x1b\[H|\x1b\[2J/g;
 
 function rewriteChunk(
   chunk: string,
@@ -43,13 +43,14 @@ function rewriteChunk(
 
   // We need to track whether the very first visible sequence is absolute.
   // Scan from start to see if there's a CUP/HVP/bare-H before any non-CSI text.
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: matching ANSI ESC introducer is the whole point
   const startsWithAbsolute = /^\x1b\[(\d*;?\d*)[Hf]/.test(chunk);
   if (startsWithAbsolute) hasAbsoluteStart = true;
 
   // Blank rows replacement buffer for 2J
   let blankRows = "";
   for (let i = 0; i < rows; i++) {
-    blankRows += `\x1b[${top + i};${left}H` + " ".repeat(cols);
+    blankRows += `\x1b[${top + i};${left}H${" ".repeat(cols)}`;
   }
 
   const rewritten = chunk.replace(CSI_ABSOLUTE_RE, (match, r1, c1, cupFlag, vpaRow) => {
@@ -69,13 +70,13 @@ function rewriteChunk(
 
     // CSI <r> d (VPA)
     if (vpaRow !== undefined) {
-      const r = parseInt(vpaRow, 10);
+      const r = Number.parseInt(vpaRow, 10);
       return `\x1b[${r + top - 1}d`;
     }
 
     // CSI <r>;<c> H|f (CUP / HVP)
-    const r = r1 !== "" ? parseInt(r1, 10) : 1;
-    const c = c1 !== "" ? parseInt(c1, 10) : 1;
+    const r = r1 !== "" ? Number.parseInt(r1, 10) : 1;
+    const c = c1 !== "" ? Number.parseInt(c1, 10) : 1;
     return `\x1b[${r + top - 1};${c + left - 1}${cupFlag}`;
   });
 
@@ -157,7 +158,7 @@ export class CarbonylSubpane {
     // Clear the sub-rect
     let clearSeq = "\x1b[s";
     for (let i = 0; i < this.rows; i++) {
-      clearSeq += `\x1b[${this.top + i};${this.left}H` + " ".repeat(this.cols);
+      clearSeq += `\x1b[${this.top + i};${this.left}H${" ".repeat(this.cols)}`;
     }
     clearSeq += "\x1b[u";
     this.stdout.write(clearSeq);

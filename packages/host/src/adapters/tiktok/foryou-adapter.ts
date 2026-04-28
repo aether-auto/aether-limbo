@@ -1,8 +1,8 @@
 import type { KeyAction } from "../../overlay/types.js";
 import type { IDisposable } from "../../pty/types.js";
-import { TokenForm } from "./token-form.js";
 import type { JsonRpcClient } from "../rpc/client.js";
 import type { IAdapter, IPane } from "../types.js";
+import { TokenForm } from "./token-form.js";
 
 // ---------------------------------------------------------------------------
 // RPC result shapes
@@ -110,10 +110,7 @@ export class TikTokForYouAdapter implements IAdapter {
 
     let validateResult: ValidateResult;
     try {
-      validateResult = (await this.opts.client.request(
-        "validate",
-        undefined,
-      )) as ValidateResult;
+      validateResult = (await this.opts.client.request("validate", undefined)) as ValidateResult;
     } catch {
       this.mode = "token";
       this.tokenForm = new TokenForm();
@@ -163,10 +160,7 @@ export class TikTokForYouAdapter implements IAdapter {
 
   private async loadFeed(): Promise<void> {
     try {
-      const result = (await this.opts.client.request(
-        "feed/list",
-        undefined,
-      )) as FeedListResult;
+      const result = (await this.opts.client.request("feed/list", undefined)) as FeedListResult;
       this.feed = result.items;
       this.selectedIndex = 0;
       this.mode = "feed";
@@ -274,10 +268,7 @@ export class TikTokForYouAdapter implements IAdapter {
     if (this.mode === "feed") {
       switch (action.kind) {
         case "scroll-down":
-          this.selectedIndex = Math.min(
-            this.feed.length - 1,
-            this.selectedIndex + 1,
-          );
+          this.selectedIndex = Math.min(this.feed.length - 1, this.selectedIndex + 1);
           break;
         case "scroll-up":
           this.selectedIndex = Math.max(0, this.selectedIndex - 1);
@@ -298,10 +289,7 @@ export class TikTokForYouAdapter implements IAdapter {
     if (this.mode === "comments") {
       switch (action.kind) {
         case "scroll-down":
-          this.selectedComment = Math.min(
-            this.comments.length - 1,
-            this.selectedComment + 1,
-          );
+          this.selectedComment = Math.min(this.comments.length - 1, this.selectedComment + 1);
           break;
         case "scroll-up":
           this.selectedComment = Math.max(0, this.selectedComment - 1);
@@ -424,9 +412,7 @@ export class TikTokForYouAdapter implements IAdapter {
 
     if (this.mode === "playing") {
       const video = this.playingVideo;
-      const header = video
-        ? `▶ Playing: @${video.author}/${video.id}`
-        : "▶ Playing";
+      const header = video ? `▶ Playing: @${video.author}/${video.id}` : "▶ Playing";
       this.pane.setLines([header, "", "q: stop"]);
     }
   }

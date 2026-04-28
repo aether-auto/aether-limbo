@@ -43,7 +43,6 @@ export class TokenForm {
       // Printable: 0x20–0x7e
       if (code >= 0x20 && code <= 0x7e) {
         this._token += ch;
-        continue;
       }
 
       // Other control bytes: silently ignore

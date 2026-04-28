@@ -123,6 +123,10 @@ describe("TokenForm", () => {
     const tokenLine = lines.find((l) => l.includes("ms_token:"));
     expect(tokenLine).toBeDefined();
     // should end with ": " (empty masked value)
-    expect(tokenLine?.trimEnd().endsWith(": ") || tokenLine?.endsWith(":  ") || tokenLine?.includes("ms_token: ")).toBe(true);
+    expect(
+      tokenLine?.trimEnd().endsWith(": ") ||
+        tokenLine?.endsWith(":  ") ||
+        tokenLine?.includes("ms_token: "),
+    ).toBe(true);
   });
 });

@@ -24,15 +24,25 @@ class FakePty implements IPty {
 
   onData(listener: (data: string) => void): IDisposable {
     this.dataListeners.push(listener);
-    return { dispose: () => { this.dataListeners = this.dataListeners.filter((l) => l !== listener); } };
+    return {
+      dispose: () => {
+        this.dataListeners = this.dataListeners.filter((l) => l !== listener);
+      },
+    };
   }
 
   onExit(listener: (event: PtyExit) => void): IDisposable {
     this.exitListeners.push(listener);
-    return { dispose: () => { this.exitListeners = this.exitListeners.filter((l) => l !== listener); } };
+    return {
+      dispose: () => {
+        this.exitListeners = this.exitListeners.filter((l) => l !== listener);
+      },
+    };
   }
 
-  write(_data: string): void { /* no-op */ }
+  write(_data: string): void {
+    /* no-op */
+  }
 
   resize(cols: number, rows: number): void {
     this.cols = cols;
@@ -65,16 +75,24 @@ interface FakeStdout {
 
 function makeStdout(): FakeStdout {
   const written: string[] = [];
-  return { written, write(c) { written.push(c); return true; } };
+  return {
+    written,
+    write(c) {
+      written.push(c);
+      return true;
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
 // Factory helper
 // ---------------------------------------------------------------------------
 
-function makeSubpane(
-  opts: { top?: number; left?: number; cols?: number; rows?: number } = {},
-): { subpane: CarbonylSubpane; fakePty: FakePty; stdout: FakeStdout } {
+function makeSubpane(opts: { top?: number; left?: number; cols?: number; rows?: number } = {}): {
+  subpane: CarbonylSubpane;
+  fakePty: FakePty;
+  stdout: FakeStdout;
+} {
   const top = opts.top ?? 10;
   const left = opts.left ?? 5;
   const cols = opts.cols ?? 20;
@@ -112,7 +130,9 @@ describe("CarbonylSubpane", () => {
     const out = stdout.written.join("");
     expect(out).toContain("\x1b[10;5H");
     expect(out).toContain("hi");
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: matching ANSI escape boundary
     expect(out).toMatch(/^\x1b\[s/);
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: matching ANSI escape boundary
     expect(out).toMatch(/\x1b\[u$/);
   });
 
@@ -149,9 +169,9 @@ describe("CarbonylSubpane", () => {
     // Must NOT contain the raw ED escape
     expect(out).not.toContain("\x1b[2J");
     // Must contain blank rows positioned at top rows
-    expect(out).toContain("\x1b[10;5H" + " ".repeat(20));
-    expect(out).toContain("\x1b[11;5H" + " ".repeat(20));
-    expect(out).toContain("\x1b[12;5H" + " ".repeat(20));
+    expect(out).toContain(`\x1b[10;5H${" ".repeat(20)}`);
+    expect(out).toContain(`\x1b[11;5H${" ".repeat(20)}`);
+    expect(out).toContain(`\x1b[12;5H${" ".repeat(20)}`);
   });
 
   // Test 6: relayChunk passes SGR and relative moves through unchanged
@@ -181,9 +201,9 @@ describe("CarbonylSubpane", () => {
     subpane.kill();
     const out = stdout.written.join("");
     // Each of the rows should be blanked
-    expect(out).toContain("\x1b[10;5H" + " ".repeat(20));
-    expect(out).toContain("\x1b[11;5H" + " ".repeat(20));
-    expect(out).toContain("\x1b[12;5H" + " ".repeat(20));
+    expect(out).toContain(`\x1b[10;5H${" ".repeat(20)}`);
+    expect(out).toContain(`\x1b[11;5H${" ".repeat(20)}`);
+    expect(out).toContain(`\x1b[12;5H${" ".repeat(20)}`);
     // Must call kill with SIGTERM
     expect(fakePty.killCalls).toContain("SIGTERM");
   });
@@ -226,7 +246,9 @@ describe("CarbonylSubpane", () => {
     fakePty.emit("\x1b[31mplain text\x1b[0m");
     const out = stdout.written.join("");
     // Should have: \x1b[s\x1b[10;5H<content>\x1b[u
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: matching ANSI escape boundary
     expect(out).toMatch(/^\x1b\[s\x1b\[10;5H/);
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: matching ANSI escape boundary
     expect(out).toMatch(/\x1b\[u$/);
   });
 
