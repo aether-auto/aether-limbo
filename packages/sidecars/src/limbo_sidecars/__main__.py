@@ -29,6 +29,10 @@ def main() -> int:
         from .twitter import home
 
         return home.main()
+    if name == "tiktok-foryou":
+        from .tiktok import foryou
+
+        return foryou.main()
     sys.stderr.write(f"unknown adapter: {name}\n")
     return 64
 
