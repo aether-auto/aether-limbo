@@ -165,6 +165,115 @@ def test_dms_messages_degrades_when_paid_tier_rejects(tmp_path: Path) -> None:
     assert out["items"] == []
 
 
+# ---------------------------------------------------------------------------
+# DM availability caching (§4.11 / §4.8 carry-over)
+# ---------------------------------------------------------------------------
+
+def _build_with_cache(client: FakeClient, tmp_path: Path, *, cache_dms: bool) -> dict[str, Any]:
+    """Build handlers with an explicit cache_dms override (avoids env patching)."""
+    s = TwitterSession(
+        client=client, session_path=tmp_path / "twitter.json", runner=sync_runner
+    )
+    return build_handlers(s, runner=sync_runner, cache_dms=cache_dms)
+
+
+def test_cache_disabled_always_probes(tmp_path: Path) -> None:
+    """With caching off, dms/threads always probes even after a failure."""
+    client = FakeClient()
+    client.dm_threads_should_fail = True
+    h = _build_with_cache(client, tmp_path, cache_dms=False)
+
+    out1 = h["dms/threads"](None)
+    assert out1["available"] is False
+
+    # Second call must still probe (not short-circuit).
+    out2 = h["dms/threads"](None)
+    assert out2["available"] is False
+
+
+def test_cache_enabled_short_circuits_after_failure(tmp_path: Path) -> None:
+    """With caching on, the second call short-circuits without hitting the client."""
+    client = FakeClient()
+    client.dm_threads_should_fail = True
+
+    # Instrument the client to count probe calls.
+    probe_count: list[int] = [0]
+    original = client.get_dm_threads
+
+    async def counting_get_dm_threads() -> list[Any]:
+        probe_count[0] += 1
+        return await original()
+
+    client.get_dm_threads = counting_get_dm_threads  # type: ignore[method-assign]
+
+    h = _build_with_cache(client, tmp_path, cache_dms=True)
+
+    out1 = h["dms/threads"](None)
+    assert out1["available"] is False
+    assert probe_count[0] == 1  # first call probed
+
+    out2 = h["dms/threads"](None)
+    assert out2["available"] is False
+    assert probe_count[0] == 1  # second call short-circuited, no new probe
+
+
+def test_cache_enabled_success_does_not_short_circuit(tmp_path: Path) -> None:
+    """With caching on and first call succeeding, subsequent calls still pass through."""
+    client = FakeClient()
+    h = _build_with_cache(client, tmp_path, cache_dms=True)
+
+    out1 = h["dms/threads"](None)
+    assert out1["available"] is True
+
+    # Second call must still reach the client (we don't block on True).
+    out2 = h["dms/threads"](None)
+    assert out2["available"] is True
+    assert len(out2["items"]) == 2
+
+
+def test_cache_dms_messages_short_circuits_after_threads_failure(tmp_path: Path) -> None:
+    """dms/messages also short-circuits when the shared cache is False."""
+    client = FakeClient()
+    client.dm_threads_should_fail = True
+
+    messages_probe_count: list[int] = [0]
+    original_msgs = client.get_dm_messages
+
+    async def counting_get_dm_messages(thread_id: str) -> list[Any]:
+        messages_probe_count[0] += 1
+        return await original_msgs(thread_id)
+
+    client.get_dm_messages = counting_get_dm_messages  # type: ignore[method-assign]
+
+    h = _build_with_cache(client, tmp_path, cache_dms=True)
+
+    # Populate the cache via dms/threads failure.
+    out_threads = h["dms/threads"](None)
+    assert out_threads["available"] is False
+
+    # dms/messages must short-circuit without probing.
+    out_msgs = h["dms/messages"]({"thread_id": "t1"})
+    assert out_msgs["available"] is False
+    assert messages_probe_count[0] == 0  # no probe reached the client
+
+
+def test_cache_disabled_messages_always_probes_independently(tmp_path: Path) -> None:
+    """With caching off, dms/messages always probes regardless of threads result."""
+    client = FakeClient()
+    client.dm_threads_should_fail = True
+    client.dm_messages_should_fail = False
+
+    h = _build_with_cache(client, tmp_path, cache_dms=False)
+
+    out_threads = h["dms/threads"](None)
+    assert out_threads["available"] is False
+
+    # Without caching, messages call still probes and succeeds independently.
+    out_msgs = h["dms/messages"]({"thread_id": "t1"})
+    assert out_msgs["available"] is True
+    assert len(out_msgs["items"]) == 2
+
+
 def test_login_handler_remembers_credentials_for_login_2fa(tmp_path: Path) -> None:
     """If twikit raises a 2FA-shaped exception, the handler should remember
     the creds so login_2fa can re-submit them with a code attached."""

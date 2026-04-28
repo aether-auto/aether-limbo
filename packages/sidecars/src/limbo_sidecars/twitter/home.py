@@ -12,6 +12,17 @@ instead of raising.
 Backend selection:
     Set ``LIMBO_TWITTER_BACKEND=tweepy`` to use the TweepySession backend.
     Default (unset or ``twikit``) uses the existing TwitterSession/twikit backend.
+
+DM availability caching (§4.11 carry-over from §4.8):
+    Set ``LIMBO_TWITTER_CACHE_DMS=1`` to enable session-level DM availability
+    caching.  When enabled, the first ``dms/threads`` or ``dms/messages`` call
+    that returns ``available: False`` writes that result into a shared mutable
+    holder (``_dms_cache``).  Subsequent calls short-circuit immediately without
+    probing the underlying client, saving a round-trip to an endpoint that is
+    known to be unavailable.  The cache lives in the sidecar process and is
+    reset on restart.  Both twikit and tweepy backends share the same cache
+    because availability is determined by the X account tier, not the client
+    library.
 """
 from __future__ import annotations
 
@@ -36,6 +47,8 @@ def _build_twikit_handlers(
     *,
     runner: Runner,
     timeline_count: int,
+    cache_dms: bool,
+    dms_cache: dict[str, Optional[bool]],
 ) -> dict[str, Callable]:
     """Build handlers that delegate to the twikit async client."""
 
@@ -111,13 +124,21 @@ def _build_twikit_handlers(
         return {"thread_id": thread_id, "title": title, "last_message": last}
 
     def dms_threads(_p: Any) -> dict[str, Any]:
+        # Cache short-circuit: if caching is enabled and we already know DMs
+        # are unavailable for this session, skip the probe entirely.
+        if cache_dms and dms_cache["available"] is False:
+            return {"available": False, "items": [], "message": "DMs unavailable (cached)"}
         try:
             threads = _run(session.client.get_dm_threads())  # type: ignore[attr-defined]
+            if cache_dms:
+                dms_cache["available"] = True
             return {
                 "available": True,
                 "items": [_dm_thread_to_item(t) for t in threads],
             }
         except Exception as err:  # noqa: BLE001 — paid-tier degradation
+            if cache_dms:
+                dms_cache["available"] = False
             return {"available": False, "items": [], "message": str(err)}
 
     def _dm_message_to_item(m: Any) -> dict[str, Any]:
@@ -129,15 +150,22 @@ def _build_twikit_handlers(
 
     def dms_messages(p: Any) -> dict[str, Any]:
         thread_id: str = p["thread_id"]
+        # Cache short-circuit: same logic as dms_threads.
+        if cache_dms and dms_cache["available"] is False:
+            return {"available": False, "items": [], "message": "DMs unavailable (cached)"}
         try:
             messages = _run(
                 session.client.get_dm_messages(thread_id)  # type: ignore[attr-defined]
             )
+            if cache_dms:
+                dms_cache["available"] = True
             return {
                 "available": True,
                 "items": [_dm_message_to_item(m) for m in messages],
             }
         except Exception as err:  # noqa: BLE001 — paid-tier degradation
+            if cache_dms:
+                dms_cache["available"] = False
             return {"available": False, "items": [], "message": str(err)}
 
     return {
@@ -160,6 +188,8 @@ def _build_tweepy_handlers(
     session: TweepySession,
     *,
     timeline_count: int,
+    cache_dms: bool,
+    dms_cache: dict[str, Optional[bool]],
 ) -> dict[str, Callable]:
     """Build handlers that delegate to TweepySession's synchronous methods."""
 
@@ -196,11 +226,24 @@ def _build_tweepy_handlers(
         return result
 
     def dms_threads(_p: Any) -> dict[str, Any]:
-        return session.dm_threads()
+        # Cache short-circuit: if caching is enabled and we already know DMs
+        # are unavailable for this session, skip the probe entirely.
+        if cache_dms and dms_cache["available"] is False:
+            return {"available": False, "items": [], "message": "DMs unavailable (cached)"}
+        result = session.dm_threads()
+        if cache_dms:
+            dms_cache["available"] = result.get("available", True)
+        return result
 
     def dms_messages(p: Any) -> dict[str, Any]:
         thread_id: str = p["thread_id"]
-        return session.dm_messages(thread_id=thread_id)
+        # Cache short-circuit: same logic as dms_threads.
+        if cache_dms and dms_cache["available"] is False:
+            return {"available": False, "items": [], "message": "DMs unavailable (cached)"}
+        result = session.dm_messages(thread_id=thread_id)
+        if cache_dms:
+            dms_cache["available"] = result.get("available", True)
+        return result
 
     return {
         "validate": validate,
@@ -223,6 +266,7 @@ def build_handlers(
     *,
     runner: Runner = asyncio.run,
     timeline_count: int = 20,
+    cache_dms: Optional[bool] = None,
 ) -> dict[str, Callable]:
     """Return JSON-RPC handler dict for the ``twitter-home`` sidecar.
 
@@ -236,10 +280,40 @@ def build_handlers(
         timeline/reply(p)     -- p = {"tweet_id": str, "text": str}
         dms/threads(_p)       -- list DM inbox; degrade if unavailable
         dms/messages(p)       -- p = {"thread_id": str}; degrade if unavailable
+
+    Args:
+        cache_dms: Override the ``LIMBO_TWITTER_CACHE_DMS`` env var.  Pass
+            ``True`` / ``False`` explicitly (useful in tests); ``None`` (default)
+            reads from the environment.
     """
+    # Resolve DM caching flag once at construction time so it is stable for
+    # the lifetime of this handler set (mirrors tiktok's _refresh_enabled pattern).
+    if cache_dms is None:
+        _cache_dms: bool = os.environ.get("LIMBO_TWITTER_CACHE_DMS", "") == "1"
+    else:
+        _cache_dms = cache_dms
+
+    # Session-level DM availability cache.  Stored as a mutable dict so that
+    # the nested closures inside both backend builders can read and write it
+    # without a ``nonlocal`` declaration (same pattern as tiktok's _refresh_state).
+    # Both backends share the same dict — availability is an account-tier
+    # property, not a client-library property.
+    _dms_cache: dict[str, Optional[bool]] = {"available": None}
+
     if isinstance(session, TweepySession):
-        return _build_tweepy_handlers(session, timeline_count=timeline_count)
-    return _build_twikit_handlers(session, runner=runner, timeline_count=timeline_count)
+        return _build_tweepy_handlers(
+            session,
+            timeline_count=timeline_count,
+            cache_dms=_cache_dms,
+            dms_cache=_dms_cache,
+        )
+    return _build_twikit_handlers(
+        session,
+        runner=runner,
+        timeline_count=timeline_count,
+        cache_dms=_cache_dms,
+        dms_cache=_dms_cache,
+    )
 
 
 # ---------------------------------------------------------------------------
