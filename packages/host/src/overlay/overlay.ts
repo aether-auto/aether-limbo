@@ -60,9 +60,16 @@ export class LimboOverlay implements IOverlayController {
     stdout.write(CLEAR_SCREEN);
     stdout.write(HOME);
     this.paint();
+    const snapBackEnabled = this.deps.snapBackEnabled !== false;
     this.stateSub = this.deps.detector.on("state", (t) => {
       if (this.open_) this.paintStatus();
-      if (t.from !== "idle" && t.to === "idle" && this.open_ && !this.snappingBack_) {
+      if (
+        snapBackEnabled &&
+        t.from !== "idle" &&
+        t.to === "idle" &&
+        this.open_ &&
+        !this.snappingBack_
+      ) {
         this.snapBack();
       }
     });

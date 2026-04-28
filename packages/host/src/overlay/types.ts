@@ -41,4 +41,9 @@ export interface OverlayDeps {
   readonly tabs?: readonly TabDefinition[];
   readonly registry?: IAdapterRegistry;
   readonly onSnapBack?: () => void;
+  /**
+   * When false the overlay will NOT auto-close when Claude transitions to idle.
+   * Defaults to true (auto-close enabled).
+   */
+  readonly snapBackEnabled?: boolean;
 }

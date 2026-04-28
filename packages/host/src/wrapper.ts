@@ -69,6 +69,26 @@ export interface RunWrapperOptions {
   readonly escalation?: { threshold: number; messages: readonly string[] };
   /** Pre-loaded secrets; expand into env vars before sidecar spawn. */
   readonly secrets?: LimboSecrets;
+  /**
+   * When false the overlay will NOT auto-close when Claude transitions to idle.
+   * Defaults to true (auto-close enabled). Wired from config.snapback.enabled.
+   */
+  readonly snapBackEnabled?: boolean;
+  /**
+   * Per-adapter env-var overrides derived from config.
+   * Keys are adapter ids; values are partial env maps merged into sidecar env.
+   */
+  readonly adapterEnv?: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  /**
+   * Global keepWarm flag from config.adapters.keepWarm.
+   * When true every adapter's keepWarm is set to true.
+   */
+  readonly globalKeepWarm?: boolean;
+  /**
+   * TikTok-specific keepWarm from config.adapters.tiktok.keepWarm.
+   * When true (or globalKeepWarm is true) the TikTok sidecar stays warm.
+   */
+  readonly tiktokKeepWarm?: boolean;
 }
 
 const FORWARDED_SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
@@ -88,8 +108,21 @@ function defaultRegistry(opts: {
   ptyFactory?: PtyFactory;
   stdout?: WrapperStdout;
   onCredentialsConfirmed?: (s: Partial<LimboSecrets>) => void;
+  /** Per-adapter env-var overrides from config (keyed by adapter id). */
+  adapterEnv?: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  /** Global keepWarm override from config.adapters.keepWarm. */
+  globalKeepWarm?: boolean;
+  /** TikTok-specific keepWarm from config.adapters.tiktok.keepWarm. */
+  tiktokKeepWarm?: boolean;
 }): IAdapterRegistry {
   const carbonylBin = opts.env.LIMBO_CARBONYL_BIN ?? "carbonyl";
+
+  /** Merge per-adapter env overrides onto base env for a given adapter id. */
+  const adapterEnvFor = (id: string): NodeJS.ProcessEnv => {
+    const extra = opts.adapterEnv?.[id];
+    if (!extra) return opts.env;
+    return { ...opts.env, ...extra };
+  };
 
   const makeRunDetached = (): ((url: string) => Promise<void>) => {
     return (url: string): Promise<void> => {
@@ -135,16 +168,20 @@ function defaultRegistry(opts: {
   // is lazy-initialised on first access and disposed by the registry's
   // dispose() path (called on wrapper exit).
   const igSidecar = new SharedInstagramSidecar({
-    env: opts.env,
+    env: adapterEnvFor("instagram-reels"), // ig env is shared across all three
     cwd: opts.cwd,
     spawn: nodeSpawn,
   });
+
+  // Instagram adapters always keep warm (shared sidecar bundle; cold-start is expensive).
+  // Global keepWarm flag does not reduce this — IG is always true.
+  const igKeepWarm = true;
 
   const igReels: AdapterDescriptor = {
     id: "instagram-reels",
     extras: ["instagram"],
     enabled: true,
-    keepWarm: true,
+    keepWarm: igKeepWarm,
     create: (): IAdapter =>
       new InstagramReelsAdapter({
         client: igSidecar.client,
@@ -157,7 +194,7 @@ function defaultRegistry(opts: {
     id: "instagram-feed",
     extras: ["instagram"],
     enabled: true,
-    keepWarm: true,
+    keepWarm: igKeepWarm,
     create: (): IAdapter =>
       new InstagramFeedAdapter({
         client: igSidecar.client,
@@ -170,7 +207,7 @@ function defaultRegistry(opts: {
     id: "instagram-dms",
     extras: ["instagram"],
     enabled: true,
-    keepWarm: true,
+    keepWarm: igKeepWarm,
     create: (): IAdapter =>
       new InstagramDmsAdapter({
         client: igSidecar.client,
@@ -178,16 +215,19 @@ function defaultRegistry(opts: {
       }),
   };
 
+  // Twitter: keepWarm defaults false; global flag can turn it on.
+  const twitterKeepWarm = opts.globalKeepWarm === true;
+
   const twitterHome: AdapterDescriptor = {
     id: "twitter-home",
     extras: ["twitter"],
     enabled: true,
-    keepWarm: false,
+    keepWarm: twitterKeepWarm,
     create: (): IAdapter => {
       const transport = new ChildProcessTransport({
         pythonExe: "python3",
         args: ["-m", "limbo_sidecars", "twitter-home"],
-        env: opts.env,
+        env: adapterEnvFor("twitter-home"),
         cwd: opts.cwd,
         spawn: nodeSpawn,
       });
@@ -199,16 +239,19 @@ function defaultRegistry(opts: {
     },
   };
 
+  // TikTok: keepWarm = tiktokKeepWarm || globalKeepWarm (union — either turns it on).
+  const tiktokKeepWarm = opts.tiktokKeepWarm === true || opts.globalKeepWarm === true;
+
   const tiktokForYou: AdapterDescriptor = {
     id: "tiktok-foryou",
     extras: ["tiktok"],
     enabled: true,
-    keepWarm: false,
+    keepWarm: tiktokKeepWarm,
     create: (): IAdapter => {
       const transport = new ChildProcessTransport({
         pythonExe: "python3",
         args: ["-m", "limbo_sidecars", "tiktok-foryou"],
-        env: opts.env,
+        env: adapterEnvFor("tiktok-foryou"),
         cwd: opts.cwd,
         spawn: nodeSpawn,
       });
@@ -260,8 +303,23 @@ function defaultRegistry(opts: {
 }
 
 // @internal — test seam only; not part of the public API
-export function _defaultRegistryForTest(env: NodeJS.ProcessEnv, cwd: string): IAdapterRegistry {
-  return defaultRegistry({ env, cwd, overlayRef: { current: undefined } });
+export function _defaultRegistryForTest(
+  env: NodeJS.ProcessEnv,
+  cwd: string,
+  opts?: {
+    globalKeepWarm?: boolean;
+    tiktokKeepWarm?: boolean;
+    adapterEnv?: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  },
+): IAdapterRegistry {
+  return defaultRegistry({
+    env,
+    cwd,
+    overlayRef: { current: undefined },
+    ...(opts?.globalKeepWarm !== undefined ? { globalKeepWarm: opts.globalKeepWarm } : {}),
+    ...(opts?.tiktokKeepWarm !== undefined ? { tiktokKeepWarm: opts.tiktokKeepWarm } : {}),
+    ...(opts?.adapterEnv !== undefined ? { adapterEnv: opts.adapterEnv } : {}),
+  });
 }
 
 function defaultTabs(env: NodeJS.ProcessEnv): readonly TabDefinition[] {
@@ -316,8 +374,14 @@ export function runWrapper(opts: RunWrapperOptions): Promise<number> {
       ptyFactory: opts.ptyFactory,
       stdout: opts.stdout,
       onCredentialsConfirmed: onCredentialsConfirmed,
+      ...(opts.adapterEnv !== undefined ? { adapterEnv: opts.adapterEnv } : {}),
+      ...(opts.globalKeepWarm !== undefined ? { globalKeepWarm: opts.globalKeepWarm } : {}),
+      ...(opts.tiktokKeepWarm !== undefined ? { tiktokKeepWarm: opts.tiktokKeepWarm } : {}),
     });
   const tabs: readonly TabDefinition[] = opts.tabs ?? defaultTabs(opts.env);
+
+  // snapBackEnabled defaults to true when unset.
+  const snapBackEnabled = opts.snapBackEnabled !== false;
 
   const overlay: IOverlayController =
     opts.overlay ??
@@ -329,6 +393,7 @@ export function runWrapper(opts: RunWrapperOptions): Promise<number> {
       onSnapBack: () =>
         pty.resize(opts.stdout.columns ?? DEFAULT_COLS, opts.stdout.rows ?? DEFAULT_ROWS),
       ...(opts.chord !== undefined ? { chord: opts.chord } : {}),
+      snapBackEnabled,
     });
   opts.onOverlay?.(overlay);
   overlayRef.current = overlay;

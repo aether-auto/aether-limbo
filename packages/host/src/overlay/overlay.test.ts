@@ -600,6 +600,54 @@ describe("LimboOverlay snap-back", () => {
     detector.setStateAndEmit("idle"); // second emission: overlay already closed, no-op
     expect(onSnapBack).toHaveBeenCalledOnce();
   });
+
+  it("snapBackEnabled=false — state transition to idle does NOT close the overlay", () => {
+    const onSnapBack = vi.fn();
+    const detector = new FakeDetector();
+    const stdout = makeStdout();
+    const overlay = new LimboOverlay({ stdout, detector, onSnapBack, snapBackEnabled: false });
+    detector.setStateAndEmit("streaming");
+    overlay.open();
+    detector.setStateAndEmit("idle");
+    expect(overlay.isOpen()).toBe(true);
+    expect(onSnapBack).not.toHaveBeenCalled();
+  });
+
+  it("snapBackEnabled=false — status bar still repaints on state change", () => {
+    const detector = new FakeDetector();
+    const stdout = makeStdout();
+    const overlay = new LimboOverlay({ stdout, detector, snapBackEnabled: false });
+    detector.setStateAndEmit("streaming");
+    overlay.open();
+    const bufBefore = stdout.buffer.length;
+    detector.setStateAndEmit("idle");
+    // A repaint should have happened (paintStatus writes to stdout).
+    expect(stdout.buffer.length).toBeGreaterThan(bufBefore);
+    // But the overlay must remain open.
+    expect(overlay.isOpen()).toBe(true);
+  });
+
+  it("snapBackEnabled=true (explicit) — still snaps back on idle", () => {
+    const onSnapBack = vi.fn();
+    const detector = new FakeDetector();
+    const stdout = makeStdout();
+    const overlay = new LimboOverlay({ stdout, detector, onSnapBack, snapBackEnabled: true });
+    detector.setStateAndEmit("streaming");
+    overlay.open();
+    detector.setStateAndEmit("idle");
+    expect(overlay.isOpen()).toBe(false);
+    expect(onSnapBack).toHaveBeenCalledOnce();
+  });
+
+  it("snapBackEnabled omitted — defaults to true (snaps back on idle)", () => {
+    const detector = new FakeDetector();
+    const stdout = makeStdout();
+    const overlay = new LimboOverlay({ stdout, detector });
+    detector.setStateAndEmit("streaming");
+    overlay.open();
+    detector.setStateAndEmit("idle");
+    expect(overlay.isOpen()).toBe(false);
+  });
 });
 
 describe("LimboOverlay captureInput seam", () => {

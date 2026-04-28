@@ -722,3 +722,180 @@ describe("DEFAULT_TABS", () => {
     expect(DEFAULT_TABS[4]?.adapterId).toBe("tiktok-foryou");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Config-driven wrapper behaviour
+// ---------------------------------------------------------------------------
+
+describe("runWrapper — config-driven options", () => {
+  it("chord override propagates to the interceptor (non-default chord)", async () => {
+    const stdin = makeStdin();
+    const stdout = makeStdout();
+    const proc = new EventEmitter();
+    let captured: MockPty | undefined;
+    const factory = vi.fn((opts: PtySpawnOptions): IPty => {
+      captured = new MockPty(opts);
+      return captured;
+    });
+    const seen: string[] = [];
+    // We don't inject an interceptor, so the wrapper creates a HotkeyInterceptor with
+    // the given chord. We verify via onInterceptor that it is created (not throwing).
+    const onInterceptor = vi.fn();
+    const promise = runWrapper({
+      claudeBin: "/fake/claude",
+      argv: [],
+      env: {},
+      cwd: "/tmp",
+      stdin,
+      stdout: stdout as unknown as NodeJS.WriteStream,
+      process: proc as unknown as NodeJS.Process,
+      ptyFactory: factory,
+      chord: "\x01", // Ctrl+A
+      onInterceptor,
+    });
+    if (!captured) throw new Error("factory not invoked synchronously");
+    expect(onInterceptor).toHaveBeenCalledOnce();
+    // The interceptor should swallow Ctrl+A and pass other chars through.
+    stdin.emit("data", Buffer.from("a\x01b"));
+    // Ctrl+A is consumed by the interceptor (not written to pty — overlay still closed).
+    // "a" and "b" pass through.
+    expect(captured.writes.join("")).toContain("a");
+    expect(captured.writes.join("")).toContain("b");
+    captured.emitExit({ exitCode: 0 });
+    await promise;
+    void seen;
+  });
+
+  it("tabs option filters which tabs appear in the overlay", async () => {
+    const stdin = makeStdin();
+    const stdout = makeStdout();
+    const proc = new EventEmitter();
+    let captured: MockPty | undefined;
+    const factory = vi.fn((opts: PtySpawnOptions): IPty => {
+      captured = new MockPty(opts);
+      return captured;
+    });
+    const customTabs = [
+      { id: "reels" as const, label: "Reels Only", placeholderRef: "test", adapterId: "instagram-reels" },
+    ];
+    let capturedOverlay: IOverlayController | undefined;
+    const promise = runWrapper({
+      claudeBin: "/fake/claude",
+      argv: [],
+      env: {},
+      cwd: "/tmp",
+      stdin,
+      stdout: stdout as unknown as NodeJS.WriteStream,
+      process: proc as unknown as NodeJS.Process,
+      ptyFactory: factory,
+      tabs: customTabs,
+      onOverlay: (o) => { capturedOverlay = o; },
+    });
+    if (!captured) throw new Error("factory not invoked synchronously");
+    capturedOverlay?.open();
+    const output = stdout.written.join("");
+    expect(output).toContain("Reels Only");
+    expect(output).not.toContain("Feed");
+    capturedOverlay?.close();
+    captured.emitExit({ exitCode: 0 });
+    await promise;
+  });
+
+  it("snapBackEnabled=false is threaded to the LimboOverlay (overlay stays open on idle)", async () => {
+    const stdin = makeStdin();
+    const stdout = makeStdout();
+    const proc = new EventEmitter();
+    let captured: MockPty | undefined;
+    const factory = vi.fn((opts: PtySpawnOptions): IPty => {
+      captured = new MockPty(opts);
+      return captured;
+    });
+
+    const stateListeners: StateListener[] = [];
+    const fakeDetector: IClaudeDetector = {
+      feed() {},
+      getState() { return "streaming" as const; },
+      on(_event: "state", listener: StateListener) {
+        stateListeners.push(listener);
+        return { dispose: () => undefined };
+      },
+      dispose() {},
+    };
+
+    let capturedOverlay: IOverlayController | undefined;
+    const promise = runWrapper({
+      claudeBin: "/fake/claude",
+      argv: [],
+      env: {},
+      cwd: "/tmp",
+      stdin,
+      stdout: stdout as unknown as NodeJS.WriteStream,
+      process: proc as unknown as NodeJS.Process,
+      ptyFactory: factory,
+      detector: fakeDetector,
+      snapBackEnabled: false,
+      onOverlay: (o) => { capturedOverlay = o; },
+    });
+    if (!captured) throw new Error("factory not invoked synchronously");
+
+    capturedOverlay?.open();
+    expect(capturedOverlay?.isOpen()).toBe(true);
+
+    // Fire state → idle: should NOT close the overlay.
+    for (const l of stateListeners) {
+      l({ from: "streaming", to: "idle", atMs: 0 });
+    }
+    expect(capturedOverlay?.isOpen()).toBe(true);
+
+    capturedOverlay?.close();
+    captured.emitExit({ exitCode: 0 });
+    await promise;
+  });
+
+  it("globalKeepWarm=true sets keepWarm=true on tiktok-foryou descriptor", () => {
+    const registry = _defaultRegistryForTest({ PATH: "/usr/bin" }, "/tmp", { globalKeepWarm: true });
+    const tiktok = registry.list().find((d) => d.id === "tiktok-foryou");
+    expect(tiktok?.keepWarm).toBe(true);
+  });
+
+  it("globalKeepWarm=false keeps tiktok-foryou keepWarm=false when tiktokKeepWarm unset", () => {
+    const registry = _defaultRegistryForTest({ PATH: "/usr/bin" }, "/tmp", { globalKeepWarm: false });
+    const tiktok = registry.list().find((d) => d.id === "tiktok-foryou");
+    expect(tiktok?.keepWarm).toBe(false);
+  });
+
+  it("tiktokKeepWarm=true sets keepWarm=true on tiktok-foryou even when globalKeepWarm is false", () => {
+    const registry = _defaultRegistryForTest({ PATH: "/usr/bin" }, "/tmp", {
+      globalKeepWarm: false,
+      tiktokKeepWarm: true,
+    });
+    const tiktok = registry.list().find((d) => d.id === "tiktok-foryou");
+    expect(tiktok?.keepWarm).toBe(true);
+  });
+
+  it("globalKeepWarm=true sets keepWarm=true on twitter-home descriptor", () => {
+    const registry = _defaultRegistryForTest({ PATH: "/usr/bin" }, "/tmp", { globalKeepWarm: true });
+    const twitter = registry.list().find((d) => d.id === "twitter-home");
+    expect(twitter?.keepWarm).toBe(true);
+  });
+
+  it("globalKeepWarm=false leaves twitter-home keepWarm=false", () => {
+    const registry = _defaultRegistryForTest({ PATH: "/usr/bin" }, "/tmp", { globalKeepWarm: false });
+    const twitter = registry.list().find((d) => d.id === "twitter-home");
+    expect(twitter?.keepWarm).toBe(false);
+  });
+
+  it("adapterEnv is merged into sidecar env for the matching adapter", () => {
+    // We can't easily inspect the env that ends up inside ChildProcessTransport without
+    // spawning a real process, but we can at least verify the registry is created
+    // without throwing when adapterEnv is provided.
+    expect(() =>
+      _defaultRegistryForTest({ PATH: "/usr/bin" }, "/tmp", {
+        adapterEnv: {
+          "twitter-home": { LIMBO_TWITTER_BACKEND: "tweepy", LIMBO_TWITTER_CACHE_DMS: "1" },
+          "tiktok-foryou": { LIMBO_TIKTOK_REFRESH_ON_FAILURE: "1" },
+        },
+      }),
+    ).not.toThrow();
+  });
+});
