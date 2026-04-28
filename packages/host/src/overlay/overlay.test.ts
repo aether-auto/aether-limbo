@@ -439,6 +439,92 @@ describe("LimboOverlay enter routing", () => {
   });
 });
 
+describe("LimboOverlay snap-back", () => {
+  it("streaming → idle while open closes the overlay", () => {
+    const { detector, overlay } = makeOverlay();
+    detector.setStateAndEmit("streaming");
+    overlay.open();
+    detector.setStateAndEmit("idle");
+    expect(overlay.isOpen()).toBe(false);
+  });
+
+  it("tool_running → idle while open closes the overlay", () => {
+    const { detector, overlay } = makeOverlay();
+    detector.setStateAndEmit("tool_running");
+    overlay.open();
+    detector.setStateAndEmit("idle");
+    expect(overlay.isOpen()).toBe(false);
+  });
+
+  it("thinking → idle while open closes the overlay", () => {
+    const { detector, overlay } = makeOverlay();
+    // FakeDetector starts at "thinking"; open while already in that state
+    overlay.open();
+    detector.setStateAndEmit("idle");
+    expect(overlay.isOpen()).toBe(false);
+  });
+
+  it("idle → streaming while open does NOT close the overlay", () => {
+    const { detector, overlay } = makeOverlay();
+    detector.setStateAndEmit("idle");
+    overlay.open();
+    detector.setStateAndEmit("streaming");
+    expect(overlay.isOpen()).toBe(true);
+  });
+
+  it("state emitted while overlay is closed is a no-op", () => {
+    const { detector, overlay } = makeOverlay();
+    detector.setStateAndEmit("streaming");
+    // overlay never opened
+    expect(() => detector.setStateAndEmit("idle")).not.toThrow();
+    expect(overlay.isOpen()).toBe(false);
+  });
+
+  it("onSnapBack fires exactly once when snap-back triggers", () => {
+    const onSnapBack = vi.fn();
+    const detector = new FakeDetector();
+    const stdout = makeStdout();
+    const overlay = new LimboOverlay({ stdout, detector, onSnapBack });
+    detector.setStateAndEmit("streaming");
+    overlay.open();
+    detector.setStateAndEmit("idle");
+    expect(onSnapBack).toHaveBeenCalledOnce();
+  });
+
+  it("onSnapBack fires BEFORE the alt-screen exit byte is written", () => {
+    const order: string[] = [];
+    const onSnapBack = (): void => {
+      order.push("callback");
+    };
+    const detector = new FakeDetector();
+    const base = makeStdout();
+    const recordingStdout = {
+      ...base,
+      write(chunk: string): boolean {
+        if (chunk.includes("\x1b[?1049l")) order.push("alt-exit");
+        return base.write(chunk);
+      },
+    };
+    const overlay = new LimboOverlay({ stdout: recordingStdout, detector, onSnapBack });
+    detector.setStateAndEmit("streaming");
+    overlay.open();
+    detector.setStateAndEmit("idle");
+    expect(order.indexOf("callback")).toBeLessThan(order.indexOf("alt-exit"));
+  });
+
+  it("emitting streaming → idle twice only fires onSnapBack once (idempotency)", () => {
+    const onSnapBack = vi.fn();
+    const detector = new FakeDetector();
+    const stdout = makeStdout();
+    const overlay = new LimboOverlay({ stdout, detector, onSnapBack });
+    detector.setStateAndEmit("streaming");
+    overlay.open();
+    detector.setStateAndEmit("idle"); // first emission: overlay closes
+    detector.setStateAndEmit("idle"); // second emission: overlay already closed, no-op
+    expect(onSnapBack).toHaveBeenCalledOnce();
+  });
+});
+
 describe("LimboOverlay captureInput seam", () => {
   it("routes raw input to adapter.captureInput before the keymap (chunk consumed, overlay stays open)", async () => {
     const detector = new FakeDetector();

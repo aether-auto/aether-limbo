@@ -277,6 +277,8 @@ export function runWrapper(opts: RunWrapperOptions): Promise<number> {
       detector,
       registry,
       tabs,
+      onSnapBack: () =>
+        pty.resize(opts.stdout.columns ?? DEFAULT_COLS, opts.stdout.rows ?? DEFAULT_ROWS),
       ...(opts.chord !== undefined ? { chord: opts.chord } : {}),
     });
   opts.onOverlay?.(overlay);

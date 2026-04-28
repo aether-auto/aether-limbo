@@ -126,11 +126,12 @@ A **guard** blocks overlay open when state is `idle`.
 - [ ] **Deferral — TikTokApi method-shape verification:** handler tests use hand-rolled fakes matching v7.1 conventions (`api.user.feed()`, `api.video(id=…).comments()`, `api.create_sessions(ms_tokens=…)`). Real-account verification is queued under §4.13 as a carry-over, mirroring the instagrapi / twikit precedent.
 
 ### 4.10 Auto-switch back on response
-- [ ] State watcher: `streaming|tool_running → idle` AND overlay open
-      → fire `snap_back`
-- [ ] Snap-back: unmount adapter, exit alt-screen, force redraw
+- [x] State watcher: `streaming|tool_running → idle` AND overlay open
+      → fire `snap_back` *(trigger generalised to "any non-idle → idle" — `t.from !== "idle" && t.to === "idle"` — covering `thinking → idle` as well as `streaming|tool_running → idle`. Wired inside the existing `this.deps.detector.on("state", …)` handler in `LimboOverlay.open()` in `packages/host/src/overlay/overlay.ts`. `OverlayDeps.onSnapBack?: () => void` added to `packages/host/src/overlay/types.ts`.)*
+- [x] Snap-back: unmount adapter, exit alt-screen, force redraw *(private `snapBack()` in `LimboOverlay` calls `onSnapBack?.()` then `close()` — `close()` already runs `unmountActive()` + writes `\x1b[?25h\x1b[?1049l`. Force redraw implemented as `pty.resize(cols, rows)` SIGWINCH-equivalent in `packages/host/src/wrapper.ts` `onSnapBack` callback; best-effort, relies on Claude TUI repainting on SIGWINCH (it does in current versions). Reentrancy guard `snappingBack_` prevents double-fire; field is reset in `open()`.)*
 - [ ] Toast in a non-PTY status region: "✓ response ready"
-- [ ] Acceptance: snap-back happens within 250 ms of state transition
+  - [ ] **Deferral — toast suppressed per user direction at §4.10 implementation:** implementing a status-region toast requires a persistent non-PTY draw surface that survives alt-screen exit; no such surface exists in the current architecture. Deferred until a dedicated status-bar layer is introduced (likely §4.11 or later). The snap-back itself is fully functional without it.
+- [x] Acceptance: snap-back happens within 250 ms of state transition *(satisfied trivially — the snap-back path is fully synchronous from the detector `state` event through `onSnapBack` → `pty.resize` and `close()`. No timer, no microtask hop. Total wall time ≪ 1 ms in unit tests.)*
 
 ### 4.11 Configuration
 - [ ] `~/.config/aether-limbo/config.toml`:

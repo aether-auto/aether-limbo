@@ -40,4 +40,5 @@ export interface OverlayDeps {
   readonly chord?: HotkeyChord;
   readonly tabs?: readonly TabDefinition[];
   readonly registry?: IAdapterRegistry;
+  readonly onSnapBack?: () => void;
 }

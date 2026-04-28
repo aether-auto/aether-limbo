@@ -29,6 +29,7 @@ interface MountedAdapter {
 
 export class LimboOverlay implements IOverlayController {
   private open_ = false;
+  private snappingBack_ = false;
   private activeIndex = 0;
   private readonly tabs: readonly TabDefinition[];
   private readonly chord: HotkeyChord;
@@ -49,6 +50,7 @@ export class LimboOverlay implements IOverlayController {
 
   open(): void {
     if (this.open_) return;
+    this.snappingBack_ = false;
     this.open_ = true;
     this.activeIndex = 0;
     this.keymap.reset();
@@ -58,8 +60,11 @@ export class LimboOverlay implements IOverlayController {
     stdout.write(CLEAR_SCREEN);
     stdout.write(HOME);
     this.paint();
-    this.stateSub = this.deps.detector.on("state", () => {
+    this.stateSub = this.deps.detector.on("state", (t) => {
       if (this.open_) this.paintStatus();
+      if (t.from !== "idle" && t.to === "idle" && this.open_ && !this.snappingBack_) {
+        this.snapBack();
+      }
     });
     void this.mountActive();
   }
@@ -73,6 +78,12 @@ export class LimboOverlay implements IOverlayController {
     const { stdout } = this.deps;
     stdout.write(SHOW_CURSOR);
     stdout.write(ALT_SCREEN_EXIT);
+  }
+
+  private snapBack(): void {
+    this.snappingBack_ = true;
+    this.deps.onSnapBack?.();
+    this.close();
   }
 
   handleInput(chunk: string): void {

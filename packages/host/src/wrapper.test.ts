@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
-import type { IClaudeDetector } from "./detector/types.js";
+import type { IClaudeDetector, StateListener } from "./detector/types.js";
 import { NullOverlayController } from "./hotkey/overlay-stub.js";
 import type { IHotkeyInterceptor, IOverlayController } from "./hotkey/types.js";
 import { DEFAULT_TABS } from "./overlay/types.js";
@@ -545,6 +545,112 @@ describe("defaultRegistry", () => {
     const echo = registry.list().find((d) => d.id === "echo");
     expect(echo).toBeDefined();
     expect(echo?.extras).toEqual([]);
+  });
+});
+
+describe("runWrapper snap-back resize-poke", () => {
+  it("calls pty.resize with current stdout dims when snap-back fires on an open overlay", async () => {
+    const stdin = makeStdin();
+    const stdout = makeStdout(120, 40);
+    const proc = new EventEmitter();
+    let captured: MockPty | undefined;
+    const factory = vi.fn((opts: PtySpawnOptions): IPty => {
+      captured = new MockPty(opts);
+      return captured;
+    });
+
+    const stateListeners: StateListener[] = [];
+    let capturedOverlay: IOverlayController | undefined;
+
+    const fakeDetector: IClaudeDetector = {
+      feed() {},
+      getState() {
+        return "streaming" as const;
+      },
+      on(_event: "state", listener: StateListener) {
+        stateListeners.push(listener);
+        return { dispose: () => undefined };
+      },
+      dispose() {},
+    };
+
+    const promise = runWrapper({
+      claudeBin: "/fake/claude",
+      argv: [],
+      env: {},
+      cwd: "/tmp",
+      stdin,
+      stdout: stdout as unknown as NodeJS.WriteStream,
+      process: proc as unknown as NodeJS.Process,
+      ptyFactory: factory,
+      detector: fakeDetector,
+      onOverlay: (o) => {
+        capturedOverlay = o;
+      },
+    });
+    if (!captured) throw new Error("factory not invoked synchronously");
+
+    capturedOverlay?.open();
+    const resizesBefore = captured.resizes.length;
+
+    for (const l of stateListeners) {
+      l({ from: "streaming", to: "idle", atMs: 0 });
+    }
+
+    expect(captured.resizes.length).toBe(resizesBefore + 1);
+    expect(captured.resizes[captured.resizes.length - 1]).toEqual({ cols: 120, rows: 40 });
+
+    captured.emitExit({ exitCode: 0 });
+    await promise;
+  });
+
+  it("does NOT call pty.resize when the overlay is closed at transition time", async () => {
+    const stdin = makeStdin();
+    const stdout = makeStdout(120, 40);
+    const proc = new EventEmitter();
+    let captured: MockPty | undefined;
+    const factory = vi.fn((opts: PtySpawnOptions): IPty => {
+      captured = new MockPty(opts);
+      return captured;
+    });
+
+    const stateListeners: StateListener[] = [];
+
+    const fakeDetector: IClaudeDetector = {
+      feed() {},
+      getState() {
+        return "streaming" as const;
+      },
+      on(_event: "state", listener: StateListener) {
+        stateListeners.push(listener);
+        return { dispose: () => undefined };
+      },
+      dispose() {},
+    };
+
+    const promise = runWrapper({
+      claudeBin: "/fake/claude",
+      argv: [],
+      env: {},
+      cwd: "/tmp",
+      stdin,
+      stdout: stdout as unknown as NodeJS.WriteStream,
+      process: proc as unknown as NodeJS.Process,
+      ptyFactory: factory,
+      detector: fakeDetector,
+    });
+    if (!captured) throw new Error("factory not invoked synchronously");
+
+    // overlay is never opened — transition should be a no-op
+    const resizesBefore = captured.resizes.length;
+    for (const l of stateListeners) {
+      l({ from: "streaming", to: "idle", atMs: 0 });
+    }
+
+    expect(captured.resizes.length).toBe(resizesBefore);
+
+    captured.emitExit({ exitCode: 0 });
+    await promise;
   });
 });
 
