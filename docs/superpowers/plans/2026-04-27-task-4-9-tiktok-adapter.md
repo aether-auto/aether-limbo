@@ -97,10 +97,10 @@ packages/sidecars/src/limbo_sidecars/__main__.py   # dispatch tiktok-foryou
 - Modify: `packages/host/src/adapters/pane.ts`
 - Test: `packages/host/src/adapters/pane.test.ts`
 
-- [ ] Step 1: Add `writeRaw?(bytes: string): void` to `IPane` in `types.ts`.
-- [ ] Step 2: Failing test in `pane.test.ts` — `writeRaw("hello")` brackets the output with `\x1b[s` and `\x1b[u` and writes the chunk verbatim between them.
-- [ ] Step 3: Implement on `OverlayPane`.
-- [ ] Step 4: Run `pnpm --filter @aether-limbo/host test -- pane`. Expect green.
+- [x] Step 1: Add `writeRaw?(bytes: string): void` to `IPane` in `types.ts`.
+- [x] Step 2: Failing test in `pane.test.ts` — `writeRaw("hello")` brackets the output with `\x1b[s` and `\x1b[u` and writes the chunk verbatim between them.
+- [x] Step 3: Implement on `OverlayPane`.
+- [x] Step 4: Run `pnpm --filter @aether-limbo/host test -- pane`. Expect green.
 
 ## Task 2: `CarbonylSubpane` — sub-rect carbonyl host
 
@@ -110,13 +110,13 @@ packages/sidecars/src/limbo_sidecars/__main__.py   # dispatch tiktok-foryou
 - New: `packages/host/src/adapters/carbonyl-subpane.ts`
 - New: `packages/host/src/adapters/carbonyl-subpane.test.ts`
 
-- [ ] Step 1: `CarbonylSubpane` class — constructor `{stdout, ptyFactory, carbonylBin, top, left, cols, rows, env}`. Spawns carbonyl via `ptyFactory({file, args, env, cwd, cols, rows})`.
-- [ ] Step 2: Failing test — given a chunk `"\x1b[1;1H[carbonyl] hi\x1b[2;3H!"` and `top=10, left=5`, the bytes written to stdout begin with `\x1b[s\x1b[10;5H` (save+position), contain the rewritten cursor moves `\x1b[10;5H` and `\x1b[11;7H`, and end with `\x1b[u` (restore).
-- [ ] Step 3: Implement `relayChunk(chunk)` — regex-rewrite `CSI <r>;<c> [Hf]`, `CSI <r> d`, bare `CSI H`, `CSI 2J`; bracket with `\x1b[s` / `\x1b[u`; prepend initial cursor-set when chunk lacks an absolute position.
-- [ ] Step 4: Failing test — `resize(cols, rows)` calls `pty.resize(cols, rows)`.
-- [ ] Step 5: Failing test — `kill()` calls `pty.kill('SIGTERM')` and clears the sub-rect with spaces.
-- [ ] Step 6: Failing test — `onExit(handler)` fires when the child PTY exits.
-- [ ] Step 7: Run `pnpm --filter @aether-limbo/host test -- carbonyl-subpane`. Expect green.
+- [x] Step 1: `CarbonylSubpane` class — constructor `{stdout, ptyFactory, carbonylBin, top, left, cols, rows, env}`. Spawns carbonyl via `ptyFactory({file, args, env, cwd, cols, rows})`.
+- [x] Step 2: Failing test — given a chunk `"\x1b[1;1H[carbonyl] hi\x1b[2;3H!"` and `top=10, left=5`, the bytes written to stdout begin with `\x1b[s\x1b[10;5H` (save+position), contain the rewritten cursor moves `\x1b[10;5H` and `\x1b[11;7H`, and end with `\x1b[u` (restore).
+- [x] Step 3: Implement `relayChunk(chunk)` — regex-rewrite `CSI <r>;<c> [Hf]`, `CSI <r> d`, bare `CSI H`, `CSI 2J`; bracket with `\x1b[s` / `\x1b[u`; prepend initial cursor-set when chunk lacks an absolute position.
+- [x] Step 4: Failing test — `resize(cols, rows)` calls `pty.resize(cols, rows)`.
+- [x] Step 5: Failing test — `kill()` calls `pty.kill('SIGTERM')` and clears the sub-rect with spaces.
+- [x] Step 6: Failing test — `onExit(handler)` fires when the child PTY exits.
+- [x] Step 7: Run `pnpm --filter @aether-limbo/host test -- carbonyl-subpane`. Expect green.
 
 ## Task 3: `TokenForm` — single-field paste form
 
@@ -126,10 +126,10 @@ packages/sidecars/src/limbo_sidecars/__main__.py   # dispatch tiktok-foryou
 - New: `packages/host/src/adapters/tiktok/token-form.ts`
 - New: `packages/host/src/adapters/tiktok/token-form.test.ts`
 
-- [ ] Step 1: Failing test — `feed("eyJ…")` accumulates into the `token` buffer; `feed("\r")` returns `{kind:"submit", payload:{ms_token:"eyJ…"}}`; `\x7f` deletes; `\x1b` cancels (returns `{kind:"cancel"}`).
-- [ ] Step 2: Failing test — printable chars 0x20-0x7e accepted; control bytes ignored; `renderLines(cols)` shows `[ TikTok session ]`, `Paste ms_token cookie:`, the masked input (last 4 chars visible, rest as `*`), and `Enter: submit   Esc: cancel`.
-- [ ] Step 3: Implement `TokenForm`.
-- [ ] Step 4: Run `pnpm --filter @aether-limbo/host test -- token-form`. Expect green.
+- [x] Step 1: Failing test — `feed("eyJ…")` accumulates into the `token` buffer; `feed("\r")` returns `{kind:"submit", payload:{ms_token:"eyJ…"}}`; `\x7f` deletes; `\x1b` cancels (returns `{kind:"cancel"}`).
+- [x] Step 2: Failing test — printable chars 0x20-0x7e accepted; control bytes ignored; `renderLines(cols)` shows `[ TikTok session ]`, `Paste ms_token cookie:`, the masked input (last 4 chars visible, rest as `*`), and `Enter: submit   Esc: cancel`.
+- [x] Step 3: Implement `TokenForm`.
+- [x] Step 4: Run `pnpm --filter @aether-limbo/host test -- token-form`. Expect green.
 
 ## Task 4: `TikTokSession` (Python)
 
@@ -140,11 +140,11 @@ packages/sidecars/src/limbo_sidecars/__main__.py   # dispatch tiktok-foryou
 - New: `packages/sidecars/src/limbo_sidecars/tiktok/session.py`
 - New: `packages/sidecars/tests/test_tiktok_session.py`
 
-- [ ] Step 1: Failing test — `validate()` returns `LoginResult("login_required", None)` when the session file is absent.
-- [ ] Step 2: Failing test — `validate()` after `set_token("eyJ…")` returns `("ready", None)` and the file has been written at mode `0600` with `{"ms_token":"eyJ…"}`.
-- [ ] Step 3: Failing test — `set_token` calls `api.create_sessions(ms_tokens=["eyJ…"], num_sessions=1)` exactly once.
-- [ ] Step 4: Implement `TikTokSession` mirroring `TwitterSession`'s shape (`runner` for asyncio, `client` accessor, persisted-cookie path).
-- [ ] Step 5: Run `pytest packages/sidecars/tests/test_tiktok_session.py`. Expect green.
+- [x] Step 1: Failing test — `validate()` returns `LoginResult("login_required", None)` when the session file is absent.
+- [x] Step 2: Failing test — `validate()` after `set_token("eyJ…")` returns `("ready", None)` and the file has been written at mode `0600` with `{"ms_token":"eyJ…"}`.
+- [x] Step 3: Failing test — `set_token` calls `api.create_sessions(ms_tokens=["eyJ…"], num_sessions=1)` exactly once.
+- [x] Step 4: Implement `TikTokSession` mirroring `TwitterSession`'s shape (`runner` for asyncio, `client` accessor, persisted-cookie path).
+- [x] Step 5: Run `pytest packages/sidecars/tests/test_tiktok_session.py`. Expect green.
 
 ## Task 5: `tiktok-foryou` sidecar handlers + dispatcher
 
@@ -155,14 +155,14 @@ packages/sidecars/src/limbo_sidecars/__main__.py   # dispatch tiktok-foryou
 - New: `packages/sidecars/tests/test_tiktok_foryou_handlers.py`
 - Modify: `packages/sidecars/src/limbo_sidecars/__main__.py`
 
-- [ ] Step 1: Failing test — `validate` round-trips `LoginResult` from session.
-- [ ] Step 2: Failing test — `set_token({"ms_token":"x"})` calls `session.set_token` and returns `LoginResult` payload.
-- [ ] Step 3: Failing test — `feed/list` calls `api.user.feed()` (async iterator), serialises top N to `{items: [{id, author, caption, url}]}` with URL `https://www.tiktok.com/@<author>/video/<id>`.
-- [ ] Step 4: Failing test — `feed/comments({video_id})` calls `api.video(id).comments()`, serialises to `{items: [{from, text}]}`. On any exception → `{available:false, items:[], message:str(err)}` (degrade pattern matches §4.8 DMs).
-- [ ] Step 5: Implement `build_handlers(session, runner=asyncio.run, count=20)`.
-- [ ] Step 6: Implement `main()` mirroring `twitter.home.main` — instantiate real `TikTokApi`, call `session.validate()`, notify `body/update`, serve.
-- [ ] Step 7: Add `tiktok-foryou` to `__main__.py` dispatcher.
-- [ ] Step 8: Run `pytest packages/sidecars/tests/test_tiktok_foryou_handlers.py`. Expect green.
+- [x] Step 1: Failing test — `validate` round-trips `LoginResult` from session.
+- [x] Step 2: Failing test — `set_token({"ms_token":"x"})` calls `session.set_token` and returns `LoginResult` payload.
+- [x] Step 3: Failing test — `feed/list` calls `api.user.feed()` (async iterator), serialises top N to `{items: [{id, author, caption, url}]}` with URL `https://www.tiktok.com/@<author>/video/<id>`.
+- [x] Step 4: Failing test — `feed/comments({video_id})` calls `api.video(id).comments()`, serialises to `{items: [{from, text}]}`. On any exception → `{available:false, items:[], message:str(err)}` (degrade pattern matches §4.8 DMs).
+- [x] Step 5: Implement `build_handlers(session, runner=asyncio.run, count=20)`.
+- [x] Step 6: Implement `main()` mirroring `twitter.home.main` — instantiate real `TikTokApi`, call `session.validate()`, notify `body/update`, serve.
+- [x] Step 7: Add `tiktok-foryou` to `__main__.py` dispatcher.
+- [x] Step 8: Run `pytest packages/sidecars/tests/test_tiktok_foryou_handlers.py`. Expect green.
 
 ## Task 6: `TikTokForYouAdapter` (host TS)
 
@@ -172,14 +172,14 @@ packages/sidecars/src/limbo_sidecars/__main__.py   # dispatch tiktok-foryou
 - New: `packages/host/src/adapters/tiktok/foryou-adapter.ts`
 - New: `packages/host/src/adapters/tiktok/foryou-adapter.test.ts`
 
-- [ ] Step 1: Failing test — mount → `validate` → `ready` → `feed/list` → renders `@author: caption` rows.
-- [ ] Step 2: Failing test — `validate` → `login_required` → `token` mode → `captureInput` returns `true` → submit fires `set_token` RPC → on `ready` switch to feed loading.
-- [ ] Step 3: Failing test — `j/k` scroll selection (via `handleKey({kind:"scroll-down"})`).
-- [ ] Step 4: Failing test — `c` from feed → `feed/comments({video_id: selected.id})` → switch to comments mode and render `<from> text` rows. `Esc` returns to feed.
-- [ ] Step 5: Failing test — `onEnter` from feed → `runSubPane(url, paneRect)` factory called with the canonical `https://www.tiktok.com/@<author>/video/<id>`.
-- [ ] Step 6: Failing test — when in `playing` mode, `q` (or any close key path) calls `subpane.kill()` and the adapter switches back to feed.
-- [ ] Step 7: Implement `TikTokForYouAdapter` (constructor takes `{client, runSubPane}` factory).
-- [ ] Step 8: Run `pnpm --filter @aether-limbo/host test -- tiktok`. Expect green.
+- [x] Step 1: Failing test — mount → `validate` → `ready` → `feed/list` → renders `@author: caption` rows.
+- [x] Step 2: Failing test — `validate` → `login_required` → `token` mode → `captureInput` returns `true` → submit fires `set_token` RPC → on `ready` switch to feed loading.
+- [x] Step 3: Failing test — `j/k` scroll selection (via `handleKey({kind:"scroll-down"})`).
+- [x] Step 4: Failing test — `c` from feed → `feed/comments({video_id: selected.id})` → switch to comments mode and render `<from> text` rows. `Esc` returns to feed.
+- [x] Step 5: Failing test — `onEnter` from feed → `runSubPane(url, paneRect)` factory called with the canonical `https://www.tiktok.com/@<author>/video/<id>`.
+- [x] Step 6: Failing test — when in `playing` mode, `q` (or any close key path) calls `subpane.kill()` and the adapter switches back to feed.
+- [x] Step 7: Implement `TikTokForYouAdapter` (constructor takes `{client, runSubPane}` factory).
+- [x] Step 8: Run `pnpm --filter @aether-limbo/host test -- tiktok`. Expect green.
 
 ## Task 7: Wire-up — wrapper.ts, overlay/types.ts, registry
 
@@ -189,10 +189,10 @@ packages/sidecars/src/limbo_sidecars/__main__.py   # dispatch tiktok-foryou
 - Modify: `packages/host/src/wrapper.ts`
 - Modify: `packages/host/src/overlay/types.ts`
 
-- [ ] Step 1: Add `tiktok-foryou` `AdapterDescriptor` in `defaultRegistry()` with `extras: ["tiktok"]`. Construct a `runSubPane` factory closure that captures the `ptyFactory` from `runWrapper` (added to `defaultRegistry` opts).
-- [ ] Step 2: Set the TikTok tab `adapterId: "tiktok-foryou"` in `DEFAULT_TABS`.
-- [ ] Step 3: Run `pnpm --filter @aether-limbo/host test`. Full host suite green.
-- [ ] Step 4: Run `pnpm --filter @aether-limbo/host build` to confirm tsup builds clean.
+- [x] Step 1: Add `tiktok-foryou` `AdapterDescriptor` in `defaultRegistry()` with `extras: ["tiktok"]`. Construct a `runSubPane` factory closure that captures the `ptyFactory` from `runWrapper` (added to `defaultRegistry` opts).
+- [x] Step 2: Set the TikTok tab `adapterId: "tiktok-foryou"` in `DEFAULT_TABS`.
+- [x] Step 3: Run `pnpm --filter @aether-limbo/host test`. Full host suite green.
+- [x] Step 4: Run `pnpm --filter @aether-limbo/host build` to confirm tsup builds clean.
 
 ## Task 8: PLAN.md updates + deferral consumption
 
@@ -201,18 +201,18 @@ packages/sidecars/src/limbo_sidecars/__main__.py   # dispatch tiktok-foryou
 **Files:**
 - Modify: `/Users/arnavmarda/Desktop/Dev/aether-limbo/PLAN.md`
 
-- [ ] Step 1: Tick the four `- [ ]` items in §4.9.
-- [ ] Step 2: **Delete** the §4.5 / §4.7 sub-pane carry-over bullet (consumed by Task 2).
-- [ ] Step 3: Update or **delete** the §4.6 pane-API carry-over bullet — the video-rendering case lands here. Keep the image-rendering case at §4.11. Rewrite the bullet to reflect that.
-- [ ] Step 4: If any v1 sub-feature was deferred during execution (e.g. tweepy-style fallback paths, image rendering, secret-key persistence beyond ms_token), record each as a nested bullet under §4.9 — per the deferral rule, never under a §5.x consolidation.
+- [x] Step 1: Tick the four `- [ ]` items in §4.9.
+- [x] Step 2: **Delete** the §4.5 / §4.7 sub-pane carry-over bullet (consumed by Task 2).
+- [x] Step 3: Update or **delete** the §4.6 pane-API carry-over bullet — the video-rendering case lands here. Keep the image-rendering case at §4.11. Rewrite the bullet to reflect that.
+- [x] Step 4: If any v1 sub-feature was deferred during execution (e.g. tweepy-style fallback paths, image rendering, secret-key persistence beyond ms_token), record each as a nested bullet under §4.9 — per the deferral rule, never under a §5.x consolidation.
 
 ## Task 9: Verification
 
-- [ ] Step 1: `pnpm --filter @aether-limbo/host typecheck` clean.
-- [ ] Step 2: `pnpm --filter @aether-limbo/host lint` clean.
-- [ ] Step 3: `pnpm --filter @aether-limbo/host test` — all tests pass.
-- [ ] Step 4: `pytest packages/sidecars/tests` — all tests pass.
-- [ ] Step 5: Cross-check (paper): the §4.9 four bullets all map to checked work in the diff.
+- [x] Step 1: `pnpm --filter @aether-limbo/host typecheck` clean.
+- [x] Step 2: `pnpm --filter @aether-limbo/host lint` clean.
+- [x] Step 3: `pnpm --filter @aether-limbo/host test` — all tests pass.
+- [x] Step 4: `pytest packages/sidecars/tests` — all tests pass.
+- [x] Step 5: Cross-check (paper): the §4.9 four bullets all map to checked work in the diff.
 
 ---
 
