@@ -260,4 +260,129 @@ describe("InstagramFeedAdapter", () => {
     await adapter.unmount();
     expect(t.closed).toBe(false);
   });
+
+  // Test 6 ─────────────────────────────────────────────────────────────────
+  it("thumbnails disabled (LIMBO_IG_THUMBNAILS=0): no feed/thumbnail request is sent", async () => {
+    const stdout = makeStdout();
+    const pane = new OverlayPane({ stdout, topRow: 2, bottomRow: 20 });
+    const t = new PairedTransport();
+    const client = new JsonRpcClient(t);
+    const runDetached = vi.fn().mockResolvedValue(undefined);
+    // Disable thumbnails via env
+    const adapter = new InstagramFeedAdapter({
+      client,
+      runDetached,
+      env: { LIMBO_IG_THUMBNAILS: "0" },
+    });
+
+    const mountP = adapter.mount(pane);
+    t.resolve({ status: "ready" });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // feed/list
+    t.resolve({
+      items: [
+        {
+          pk: "1",
+          code: "aaa",
+          author: "alice",
+          caption: "hello",
+          url: "https://www.instagram.com/p/aaa/",
+        },
+      ],
+    });
+    await mountP;
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // No feed/thumbnail request should have been issued
+    const methods = t.written.map((w) => (JSON.parse(w) as { method: string }).method);
+    expect(methods).not.toContain("feed/thumbnail");
+  });
+
+  // Test 7 ─────────────────────────────────────────────────────────────────
+  it("thumbnails enabled: feed/thumbnail request is sent after feed/list", async () => {
+    const stdout = makeStdout();
+    const pane = new OverlayPane({ stdout, topRow: 2, bottomRow: 20 });
+    const t = new PairedTransport();
+    const client = new JsonRpcClient(t);
+    const runDetached = vi.fn().mockResolvedValue(undefined);
+    // Enable thumbnails with symbols format
+    const adapter = new InstagramFeedAdapter({
+      client,
+      runDetached,
+      env: { LIMBO_IG_THUMBNAILS: "1", LIMBO_GRAPHICS_PROTOCOL: "symbols" },
+    });
+
+    const mountP = adapter.mount(pane);
+    t.resolve({ status: "ready" });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // feed/list
+    t.resolve({
+      items: [
+        {
+          pk: "42",
+          code: "aaa",
+          author: "alice",
+          caption: "hello",
+          url: "https://www.instagram.com/p/aaa/",
+        },
+      ],
+    });
+    await mountP;
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // feed/thumbnail should have been requested
+    const methods = t.written.map((w) => (JSON.parse(w) as { method: string }).method);
+    expect(methods).toContain("feed/thumbnail");
+  });
+
+  // Test 8 ─────────────────────────────────────────────────────────────────
+  it("chafa-not-installed response (ok=false): silent fallback — text still shown", async () => {
+    const stdout = makeStdout();
+    const pane = new OverlayPane({ stdout, topRow: 2, bottomRow: 20 });
+    const t = new PairedTransport();
+    const client = new JsonRpcClient(t);
+    const runDetached = vi.fn().mockResolvedValue(undefined);
+    const adapter = new InstagramFeedAdapter({
+      client,
+      runDetached,
+      env: { LIMBO_IG_THUMBNAILS: "1", LIMBO_GRAPHICS_PROTOCOL: "symbols" },
+    });
+
+    const mountP = adapter.mount(pane);
+    t.resolve({ status: "ready" });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    t.resolve({
+      items: [
+        {
+          pk: "99",
+          code: "zzz",
+          author: "bob",
+          caption: "my post",
+          url: "https://www.instagram.com/p/zzz/",
+        },
+      ],
+    });
+    await mountP;
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Resolve the feed/thumbnail with a chafa-not-installed error
+    t.resolve({ ok: false, message: "chafa not installed" });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Text should still be rendered (no crash, @bob is visible)
+    const output = stdout.buffer.join("");
+    expect(output).toContain("@bob");
+  });
 });

@@ -1,5 +1,6 @@
 import type { IDisposable } from "../pty/types.js";
-import type { IPane } from "./types.js";
+import { rewriteAbsoluteCursors } from "../terminal/cursor-rewriter.js";
+import type { IPane, ThumbnailRect } from "./types.js";
 
 interface StdoutLike {
   readonly columns?: number;
@@ -49,6 +50,43 @@ export class OverlayPane implements IPane {
       stdout.write(line);
     }
     stdout.write(SGR_RESET);
+  }
+
+  writeRaw(bytes: Uint8Array, rect: ThumbnailRect): void {
+    const { stdout } = this.opts;
+    const paneRows = this.rows;
+    const paneCols = this.cols;
+
+    // Validate rect bounds — drop silently if out of range.
+    if (
+      rect.topRow < 1 ||
+      rect.leftCol < 1 ||
+      rect.topRow > paneRows ||
+      rect.leftCol > paneCols ||
+      rect.rows <= 0 ||
+      rect.cols <= 0
+    ) {
+      return;
+    }
+
+    // Convert pane-relative rect to absolute screen coordinates.
+    const absTop = this.topRow_ + rect.topRow - 1;
+    const absLeft = rect.leftCol;
+
+    // Decode bytes to string (chafa output is always valid UTF-8 / ASCII).
+    const chunk = new TextDecoder().decode(bytes);
+
+    const { rewritten, hasAbsoluteStart } = rewriteAbsoluteCursors(
+      chunk,
+      absTop,
+      absLeft,
+      rect.cols,
+      rect.rows,
+    );
+
+    // Bracket with cursor save/restore; prepend initial position if needed.
+    const initialPos = hasAbsoluteStart ? "" : `\x1b[${absTop};${absLeft}H`;
+    stdout.write(`\x1b[s${initialPos}${rewritten}\x1b[u`);
   }
 
   on(event: "resize", listener: (cols: number, rows: number) => void): IDisposable {

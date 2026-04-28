@@ -94,6 +94,7 @@ def test_bundle_exports_all_expected_method_names(tmp_path: Path) -> None:
         "login_2fa",
         "media/list",
         "feed/list",
+        "feed/thumbnail",
         "dms/threads",
         "dms/messages",
         "dms/send",

@@ -3,11 +3,29 @@ import type { IDisposable } from "../pty/types.js";
 
 export type AdapterLifecycleEvent = "mounting" | "mounted" | "unmounting" | "unmounted" | "errored";
 
+export interface ThumbnailRect {
+  /** 1-indexed row within the pane (1 = first row of the pane's region). */
+  readonly topRow: number;
+  /** 1-indexed column within the pane (1 = leftmost column of the pane's region). */
+  readonly leftCol: number;
+  readonly rows: number;
+  readonly cols: number;
+}
+
 export interface IPane {
   readonly cols: number;
   readonly rows: number;
   readonly topRow: number;
   setLines(lines: readonly string[]): void;
+  /**
+   * Paint raw terminal bytes (e.g. chafa kitty/sixel output) into a
+   * sub-rect of the pane. The rect coordinates are pane-relative (1-indexed).
+   * Absolute-cursor sequences inside `bytes` are rewritten so that origin
+   * (1,1) maps to (rect.topRow, rect.leftCol) in absolute screen coordinates.
+   * Output is bracketed with cursor-save / cursor-restore so nothing leaks.
+   * Out-of-bounds rects are silently dropped.
+   */
+  writeRaw(bytes: Uint8Array, rect: ThumbnailRect): void;
   on(event: "resize", listener: (cols: number, rows: number) => void): IDisposable;
 }
 

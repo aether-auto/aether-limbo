@@ -33,6 +33,7 @@ function makePane(): { pane: IPane; allLines: string[][] } {
     setLines(l) {
       allLines.push([...l]);
     },
+    writeRaw: () => undefined,
     on(_ev, _li): IDisposable {
       return { dispose: () => undefined };
     },

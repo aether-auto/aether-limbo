@@ -1,9 +1,14 @@
 import type { LimboSecrets } from "../../config/secrets.js";
 import type { KeyAction } from "../../overlay/types.js";
 import type { IDisposable } from "../../pty/types.js";
+import {
+  detectGraphicsProtocol,
+  thumbnailMaxRows,
+  thumbnailsDisabled,
+} from "../../terminal/graphics-cap.js";
 import { BootstrapPanel } from "../bootstrap-panel.js";
 import type { JsonRpcClient } from "../rpc/client.js";
-import type { IAdapter, IPane } from "../types.js";
+import type { IAdapter, IPane, ThumbnailRect } from "../types.js";
 import { LoginForm } from "./login-form.js";
 import type { SharedInstagramSidecar } from "./shared-sidecar.js";
 
@@ -33,6 +38,10 @@ interface FeedListResult {
   readonly items: readonly FeedItem[];
 }
 
+type ThumbnailResult =
+  | { readonly ok: true; readonly format: string; readonly encoded: string }
+  | { readonly ok: false; readonly message: string };
+
 // ---------------------------------------------------------------------------
 // Adapter options
 // ---------------------------------------------------------------------------
@@ -47,6 +56,11 @@ export interface InstagramFeedAdapterOptions {
    * streaming progress into a BootstrapPanel.
    */
   readonly igSidecar?: SharedInstagramSidecar;
+  /**
+   * Process environment used for thumbnail capability detection.
+   * Defaults to process.env when omitted.
+   */
+  readonly env?: NodeJS.ProcessEnv;
 }
 
 // ---------------------------------------------------------------------------
@@ -272,6 +286,70 @@ export class InstagramFeedAdapter implements IAdapter {
     void this.opts.runDetached(item.url);
   }
 
+  private _thumbnailsEnabled(): boolean {
+    const env = this.opts.env ?? process.env;
+    return !thumbnailsDisabled(env);
+  }
+
+  private _maxThumbRows(): number {
+    const env = this.opts.env ?? process.env;
+    return thumbnailMaxRows(env);
+  }
+
+  private _graphicsProtocol(): string {
+    const env = this.opts.env ?? process.env;
+    return detectGraphicsProtocol(env);
+  }
+
+  /**
+   * Request thumbnails for the first N visible items in parallel and paint
+   * them into the pane. Silently ignores any error for individual rows.
+   */
+  private _paintThumbnails(): void {
+    if (!this.pane || !this._thumbnailsEnabled()) return;
+    const maxRows = this._maxThumbRows();
+    if (maxRows === 0) return;
+
+    const pane = this.pane;
+    const protocol = this._graphicsProtocol();
+
+    // Header lines: "[ Feed ]" + "" = 2 lines before items
+    const HEADER_LINES = 2;
+    // Each item occupies ITEM_HEIGHT pane rows; thumbnail is 3 rows tall
+    const THUMB_ROWS = 3;
+    const THUMB_COLS = 12;
+
+    const count = Math.min(this.items.length, maxRows);
+
+    const requests = this.items.slice(0, count).map((item, i) => {
+      return this.opts.client
+        .request("feed/thumbnail", {
+          media_id: item.pk,
+          cols: THUMB_COLS,
+          rows: THUMB_ROWS,
+          format: protocol,
+        })
+        .then((raw) => {
+          const result = raw as ThumbnailResult;
+          if (!result.ok) return;
+          const bytes = base64Decode(result.encoded);
+          const rect: ThumbnailRect = {
+            topRow: HEADER_LINES + i * THUMB_ROWS + 1,
+            leftCol: 1,
+            rows: THUMB_ROWS,
+            cols: THUMB_COLS,
+          };
+          pane.writeRaw(bytes, rect);
+        })
+        .catch(() => {
+          // Silent fallback — text rendering already shown by setLines.
+        });
+    });
+
+    // Fire-and-forget; the user already sees text rows.
+    void Promise.all(requests);
+  }
+
   private repaint(): void {
     if (!this.pane) return;
 
@@ -287,16 +365,25 @@ export class InstagramFeedAdapter implements IAdapter {
 
     // list mode
     const cols = this.pane.cols;
+    const useThumbs = this._thumbnailsEnabled() && this._maxThumbRows() > 0;
+    const THUMB_COLS = 12;
+    // Each item row: thumbnail occupies 3 rows, so we repeat the text on each of the 3 lines
+    // but only need one logical entry; keep simple — one text line per item, thumbnails overlay.
     const lines: string[] = ["[ Feed ]", ""];
 
     if (this.items.length === 0) {
       lines.push("(no posts)");
     } else {
+      const maxRows = this._maxThumbRows();
       for (let i = 0; i < this.items.length; i++) {
-        const item = this.items[i]!;
+        const item = this.items[i];
+        if (!item) continue;
         const prefix = i === this.selected ? "▸ " : "  ";
-        const row = `@${item.author}: ${item.caption}`;
-        lines.push((prefix + row).slice(0, cols));
+        const textOffset = useThumbs && i < maxRows ? THUMB_COLS + 2 : 0;
+        // Pad left if thumbnail is shown so text appears to the right of it.
+        const padding = " ".repeat(textOffset);
+        const row = `${padding}${prefix}@${item.author}: ${item.caption}`;
+        lines.push(row.slice(0, cols));
       }
     }
 
@@ -304,5 +391,18 @@ export class InstagramFeedAdapter implements IAdapter {
     lines.push("Enter: open in carbonyl   j/k: scroll   q: close");
 
     this.pane.setLines(lines);
+
+    // After painting text rows, overlay thumbnails asynchronously.
+    if (useThumbs && this.mode === "list" && this.items.length > 0) {
+      this._paintThumbnails();
+    }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Utility: decode base64 string to Uint8Array (Node built-in)
+// ---------------------------------------------------------------------------
+
+function base64Decode(encoded: string): Uint8Array {
+  return Buffer.from(encoded, "base64");
 }

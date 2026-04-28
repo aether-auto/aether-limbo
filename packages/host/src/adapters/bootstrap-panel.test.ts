@@ -11,6 +11,7 @@ function makePane(cols = 80, rows = 24): { pane: IPane; lines: string[][] } {
     setLines(l) {
       calls.push([...l]);
     },
+    writeRaw: () => undefined,
     on: (_event, _listener) => ({ dispose: () => undefined }),
   };
   return { pane, lines: calls };
