@@ -16,7 +16,7 @@ export const DEFAULT_TABS: readonly TabDefinition[] = [
   { id: "feed", label: "Feed", placeholderRef: "§4.7", adapterId: "instagram-feed" },
   { id: "dms", label: "DMs", placeholderRef: "§4.7", adapterId: "instagram-dms" },
   { id: "x", label: "X", placeholderRef: "§4.8", adapterId: "twitter-home" },
-  { id: "tiktok", label: "TikTok", placeholderRef: "§4.9" },
+  { id: "tiktok", label: "TikTok", placeholderRef: "§4.9", adapterId: "tiktok-foryou" },
 ];
 
 export type KeyAction =

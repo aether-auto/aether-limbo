@@ -1,4 +1,5 @@
 import { spawn as nodeSpawn } from "node:child_process";
+import { CarbonylSubpane } from "./adapters/carbonyl-subpane.js";
 import { runDetached } from "./adapters/carbonyl.js";
 import { EchoAdapter } from "./adapters/echo-adapter.js";
 import { InstagramDmsAdapter } from "./adapters/instagram/dms-adapter.js";
@@ -7,6 +8,11 @@ import { InstagramReelsAdapter } from "./adapters/instagram/reels-adapter.js";
 import { BuiltinAdapterRegistry } from "./adapters/registry.js";
 import { JsonRpcClient } from "./adapters/rpc/client.js";
 import { ChildProcessTransport } from "./adapters/sidecar/child-transport.js";
+import {
+  type SubPaneController,
+  type SubPaneRect,
+  TikTokForYouAdapter,
+} from "./adapters/tiktok/foryou-adapter.js";
 import { TwitterHomeAdapter } from "./adapters/twitter/home-adapter.js";
 import type { AdapterDescriptor, IAdapter, IAdapterRegistry } from "./adapters/types.js";
 import { ClaudeStateDetector } from "./detector/detector.js";
@@ -64,6 +70,8 @@ function defaultRegistry(opts: {
   env: NodeJS.ProcessEnv;
   cwd: string;
   overlayRef: OverlayRef;
+  ptyFactory?: PtyFactory;
+  stdout?: WrapperStdout;
 }): IAdapterRegistry {
   const carbonylBin = opts.env.LIMBO_CARBONYL_BIN ?? "carbonyl";
 
@@ -72,6 +80,32 @@ function defaultRegistry(opts: {
       const overlay = opts.overlayRef.current;
       if (!overlay) return Promise.resolve();
       return runDetached({ url, overlay, spawn: nodeSpawn, carbonylBin });
+    };
+  };
+
+  const makeRunSubPane = (): ((url: string, rect: SubPaneRect) => SubPaneController) => {
+    return (url: string, rect: SubPaneRect): SubPaneController => {
+      const ptyFactory = opts.ptyFactory;
+      const stdout = opts.stdout;
+      if (!ptyFactory || !stdout) {
+        // Test-seam fallback: a no-op controller. Real wrapper always passes both.
+        return {
+          kill: () => undefined,
+          onExit: () => ({ dispose: () => undefined }),
+        };
+      }
+      return new CarbonylSubpane({
+        stdout,
+        ptyFactory,
+        carbonylBin,
+        url,
+        env: opts.env,
+        cwd: opts.cwd,
+        top: rect.top,
+        left: rect.left,
+        cols: rect.cols,
+        rows: rect.rows,
+      });
     };
   };
 
@@ -148,6 +182,25 @@ function defaultRegistry(opts: {
     },
   };
 
+  const tiktokForYou: AdapterDescriptor = {
+    id: "tiktok-foryou",
+    extras: ["tiktok"],
+    enabled: true,
+    create: (): IAdapter => {
+      const transport = new ChildProcessTransport({
+        pythonExe: "python3",
+        args: ["-m", "limbo_sidecars", "tiktok-foryou"],
+        env: opts.env,
+        cwd: opts.cwd,
+        spawn: nodeSpawn,
+      });
+      return new TikTokForYouAdapter({
+        client: new JsonRpcClient(transport),
+        runSubPane: makeRunSubPane(),
+      });
+    },
+  };
+
   const echoDescriptor: AdapterDescriptor = {
     id: "echo",
     extras: [],
@@ -164,7 +217,14 @@ function defaultRegistry(opts: {
     },
   };
 
-  return new BuiltinAdapterRegistry([igReels, igFeed, igDms, twitterHome, echoDescriptor]);
+  return new BuiltinAdapterRegistry([
+    igReels,
+    igFeed,
+    igDms,
+    twitterHome,
+    tiktokForYou,
+    echoDescriptor,
+  ]);
 }
 
 // @internal — test seam only; not part of the public API
@@ -200,7 +260,14 @@ export function runWrapper(opts: RunWrapperOptions): Promise<number> {
 
   const overlayRef: OverlayRef = { current: undefined };
   const registry: IAdapterRegistry =
-    opts.adapterRegistry ?? defaultRegistry({ env: opts.env, cwd: opts.cwd, overlayRef });
+    opts.adapterRegistry ??
+    defaultRegistry({
+      env: opts.env,
+      cwd: opts.cwd,
+      overlayRef,
+      ptyFactory: opts.ptyFactory,
+      stdout: opts.stdout,
+    });
   const tabs: readonly TabDefinition[] = opts.tabs ?? defaultTabs(opts.env);
 
   const overlay: IOverlayController =

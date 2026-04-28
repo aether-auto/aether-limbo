@@ -511,7 +511,7 @@ describe("runWrapper", () => {
 });
 
 describe("defaultRegistry", () => {
-  it("lists adapter ids in order: instagram-reels, instagram-feed, instagram-dms, twitter-home, echo", () => {
+  it("lists adapter ids in order: instagram-reels, instagram-feed, instagram-dms, twitter-home, tiktok-foryou, echo", () => {
     const registry = _defaultRegistryForTest({ PATH: "/usr/bin" }, "/tmp");
     const ids = registry.list().map((d) => d.id);
     expect(ids).toEqual([
@@ -519,8 +519,16 @@ describe("defaultRegistry", () => {
       "instagram-feed",
       "instagram-dms",
       "twitter-home",
+      "tiktok-foryou",
       "echo",
     ]);
+  });
+
+  it('the tiktok-foryou descriptor has extras: ["tiktok"]', () => {
+    const registry = _defaultRegistryForTest({ PATH: "/usr/bin" }, "/tmp");
+    const tiktok = registry.list().find((d) => d.id === "tiktok-foryou");
+    expect(tiktok).toBeDefined();
+    expect(tiktok?.extras).toEqual(["tiktok"]);
   });
 
   it('all instagram-* descriptors have extras: ["instagram"]', () => {
@@ -545,5 +553,10 @@ describe("DEFAULT_TABS", () => {
     expect(DEFAULT_TABS[0]?.adapterId).toBe("instagram-reels");
     expect(DEFAULT_TABS[1]?.adapterId).toBe("instagram-feed");
     expect(DEFAULT_TABS[2]?.adapterId).toBe("instagram-dms");
+  });
+
+  it("the X tab binds to twitter-home and the TikTok tab binds to tiktok-foryou", () => {
+    expect(DEFAULT_TABS[3]?.adapterId).toBe("twitter-home");
+    expect(DEFAULT_TABS[4]?.adapterId).toBe("tiktok-foryou");
   });
 });
