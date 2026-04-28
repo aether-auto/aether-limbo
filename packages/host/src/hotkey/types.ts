@@ -1,4 +1,5 @@
-import type { ClaudeState } from "../detector/types.js";
+import type { ClaudeState, StateTransition } from "../detector/types.js";
+import type { IDisposable } from "../pty/types.js";
 
 export type HotkeyChord = string;
 
@@ -16,11 +17,12 @@ export interface IOverlayController {
 }
 
 export interface IShameRenderer {
-  showShame(): Promise<void>;
+  showShame(message?: string): Promise<void>;
 }
 
 export interface DetectorView {
   getState(): ClaudeState;
+  on?(event: "state", listener: (transition: StateTransition) => void): IDisposable;
 }
 
 export interface StdoutView {

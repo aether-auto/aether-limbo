@@ -126,4 +126,38 @@ describe("ShameFlash", () => {
     const expectedCol = Math.floor((80 - SHAME_MESSAGE.length) / 2) + 1;
     expect(captured.join("")).toContain(`\x1b[${expectedRow};${expectedCol}H`);
   });
+
+  it("uses the override message when showShame is called with a message argument", async () => {
+    const stdout = makeStdout(80, 24);
+    const clock = makeClock();
+    const flash = new ShameFlash({ stdout, clock });
+    const done = flash.showShame("custom override");
+    expect(stdout.joined()).toContain("custom override");
+    expect(stdout.joined()).not.toContain(SHAME_MESSAGE);
+    clock.fire();
+    await done;
+  });
+
+  it("falls back to the constructor message when showShame is called with no args", async () => {
+    const stdout = makeStdout(80, 24);
+    const clock = makeClock();
+    const flash = new ShameFlash({ stdout, clock, message: "constructor msg" });
+    const done = flash.showShame();
+    expect(stdout.joined()).toContain("constructor msg");
+    clock.fire();
+    await done;
+  });
+
+  it("reentrancy guard still coalesces when called with different messages", async () => {
+    const stdout = makeStdout();
+    const clock = makeClock();
+    const flash = new ShameFlash({ stdout, clock });
+    flash.showShame("first");
+    // Second call while active — should be ignored
+    await flash.showShame("second");
+    expect(stdout.written.filter((s) => s === "\x1b[?1049h").length).toBe(1);
+    expect(stdout.joined()).toContain("first");
+    expect(stdout.joined()).not.toContain("second");
+    clock.fire();
+  });
 });

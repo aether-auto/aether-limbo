@@ -54,6 +54,9 @@ export interface RunWrapperOptions {
   readonly chord?: HotkeyChord;
   readonly adapterRegistry?: IAdapterRegistry;
   readonly tabs?: readonly TabDefinition[];
+  readonly shameMessage?: string;
+  readonly shameHoldMs?: number;
+  readonly escalation?: { threshold: number; messages: readonly string[] };
 }
 
 const FORWARDED_SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
@@ -289,8 +292,13 @@ export function runWrapper(opts: RunWrapperOptions): Promise<number> {
     new HotkeyInterceptor({
       detector,
       overlay,
-      shame: new ShameFlash({ stdout: opts.stdout }),
+      shame: new ShameFlash({
+        stdout: opts.stdout,
+        ...(opts.shameMessage !== undefined ? { message: opts.shameMessage } : {}),
+        ...(opts.shameHoldMs !== undefined ? { holdMs: opts.shameHoldMs } : {}),
+      }),
       ...(opts.chord !== undefined ? { chord: opts.chord } : {}),
+      ...(opts.escalation !== undefined ? { escalation: opts.escalation } : {}),
     });
   opts.onInterceptor?.(interceptor);
 

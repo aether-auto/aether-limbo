@@ -30,21 +30,22 @@ export class ShameFlash implements IShameRenderer {
     this.message = opts.message ?? SHAME_MESSAGE;
   }
 
-  showShame(): Promise<void> {
+  showShame(message?: string): Promise<void> {
     if (this.active) return Promise.resolve();
     this.active = true;
 
+    const msg = message ?? this.message;
     const { stdout } = this.opts;
     const cols = stdout.columns ?? 80;
     const rows = stdout.rows ?? 24;
     const row = Math.max(1, Math.floor(rows / 2));
-    const col = Math.max(1, Math.floor((cols - this.message.length) / 2) + 1);
+    const col = Math.max(1, Math.floor((cols - msg.length) / 2) + 1);
 
     stdout.write(ALT_SCREEN_ENTER);
     stdout.write(HIDE_CURSOR);
     stdout.write(CLEAR_SCREEN);
     stdout.write(moveCursor(row, col));
-    stdout.write(this.message);
+    stdout.write(msg);
 
     return new Promise<void>((resolve) => {
       this.clock.setTimeout(() => {
