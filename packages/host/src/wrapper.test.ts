@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
+import type { IAdapterRegistry } from "./adapters/types.js";
 import type { IClaudeDetector, StateListener } from "./detector/types.js";
 import { NullOverlayController } from "./hotkey/overlay-stub.js";
 import type { IHotkeyInterceptor, IOverlayController } from "./hotkey/types.js";
@@ -366,6 +367,39 @@ describe("runWrapper", () => {
     expect(captured.writes).toEqual(["there"]);
     captured.emitExit({ exitCode: 0 });
     await promise;
+  });
+
+  it("calls registry.dispose() after the PTY exits", async () => {
+    const stdin = makeStdin();
+    const stdout = makeStdout();
+    const proc = new EventEmitter();
+    let captured: MockPty | undefined;
+    const factory = vi.fn((opts: PtySpawnOptions): IPty => {
+      captured = new MockPty(opts);
+      return captured;
+    });
+    const disposeSpy = vi.fn(async () => undefined);
+    const mockRegistry: IAdapterRegistry = {
+      get: () => undefined,
+      list: () => [],
+      release: async () => undefined,
+      dispose: disposeSpy,
+    };
+    const promise = runWrapper({
+      claudeBin: "/fake/claude",
+      argv: [],
+      env: {},
+      cwd: "/tmp",
+      stdin,
+      stdout: stdout as unknown as NodeJS.WriteStream,
+      process: proc as unknown as NodeJS.Process,
+      ptyFactory: factory,
+      adapterRegistry: mockRegistry,
+    });
+    if (!captured) throw new Error("factory not invoked synchronously");
+    captured.emitExit({ exitCode: 0 });
+    await promise;
+    expect(disposeSpy).toHaveBeenCalledOnce();
   });
 
   it("closes a still-open overlay when the PTY exits", async () => {

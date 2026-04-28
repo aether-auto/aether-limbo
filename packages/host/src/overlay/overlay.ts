@@ -230,10 +230,20 @@ export class LimboOverlay implements IOverlayController {
     if (!this.open_) {
       const m = this.mounted;
       this.mounted = undefined;
-      try {
-        await m?.adapter.unmount();
-      } catch {
-        // teardown failures during close-race recovery must not throw
+      if (m !== undefined) {
+        if (this.registry) {
+          try {
+            await this.registry.release(m.adapter);
+          } catch {
+            // teardown failures during close-race recovery must not throw
+          }
+        } else {
+          try {
+            await m.adapter.unmount();
+          } catch {
+            // teardown failures during close-race recovery must not throw
+          }
+        }
       }
     }
   }
@@ -242,10 +252,18 @@ export class LimboOverlay implements IOverlayController {
     const m = this.mounted;
     if (!m) return;
     this.mounted = undefined;
-    try {
-      await m.adapter.unmount();
-    } catch {
-      // adapter teardown failures must not block the overlay lifecycle
+    if (this.registry) {
+      try {
+        await this.registry.release(m.adapter);
+      } catch {
+        // adapter teardown failures must not block the overlay lifecycle
+      }
+    } else {
+      try {
+        await m.adapter.unmount();
+      } catch {
+        // adapter teardown failures must not block the overlay lifecycle
+      }
     }
   }
 }

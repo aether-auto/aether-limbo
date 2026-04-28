@@ -116,6 +116,7 @@ function defaultRegistry(opts: {
     id: "instagram-reels",
     extras: ["instagram"],
     enabled: true,
+    keepWarm: false,
     create: (): IAdapter => {
       const transport = new ChildProcessTransport({
         pythonExe: "python3",
@@ -135,6 +136,7 @@ function defaultRegistry(opts: {
     id: "instagram-feed",
     extras: ["instagram"],
     enabled: true,
+    keepWarm: false,
     create: (): IAdapter => {
       const transport = new ChildProcessTransport({
         pythonExe: "python3",
@@ -154,6 +156,7 @@ function defaultRegistry(opts: {
     id: "instagram-dms",
     extras: ["instagram"],
     enabled: true,
+    keepWarm: false,
     create: (): IAdapter => {
       const transport = new ChildProcessTransport({
         pythonExe: "python3",
@@ -170,6 +173,7 @@ function defaultRegistry(opts: {
     id: "twitter-home",
     extras: ["twitter"],
     enabled: true,
+    keepWarm: false,
     create: (): IAdapter => {
       const transport = new ChildProcessTransport({
         pythonExe: "python3",
@@ -189,6 +193,7 @@ function defaultRegistry(opts: {
     id: "tiktok-foryou",
     extras: ["tiktok"],
     enabled: true,
+    keepWarm: false,
     create: (): IAdapter => {
       const transport = new ChildProcessTransport({
         pythonExe: "python3",
@@ -208,6 +213,7 @@ function defaultRegistry(opts: {
     id: "echo",
     extras: [],
     enabled: true,
+    keepWarm: false,
     create: (): IAdapter => {
       const transport = new ChildProcessTransport({
         pythonExe: "python3",
@@ -351,7 +357,7 @@ export function runWrapper(opts: RunWrapperOptions): Promise<number> {
         for (const d of disposables) d.dispose();
         if (overlay.isOpen()) overlay.close();
         detector.dispose();
-        resolve(translateExit(event));
+        void registry.dispose?.().then(() => resolve(translateExit(event)));
       }),
     );
   });

@@ -33,10 +33,16 @@ describe("adapter contract types", () => {
     expectTypeOf<AdapterDescriptor["extras"]>().toEqualTypeOf<readonly string[]>();
     expectTypeOf<AdapterDescriptor["create"]>().toBeFunction();
     expectTypeOf<AdapterDescriptor["enabled"]>().toEqualTypeOf<boolean>();
+    expectTypeOf<AdapterDescriptor["keepWarm"]>().toEqualTypeOf<boolean>();
   });
 
   it("IAdapterRegistry.get returns IAdapter | undefined", () => {
     expectTypeOf<IAdapterRegistry["get"]>().returns.toEqualTypeOf<IAdapter | undefined>();
+  });
+
+  it("IAdapterRegistry.release and dispose return Promise<void>", () => {
+    expectTypeOf<IAdapterRegistry["release"]>().returns.toEqualTypeOf<Promise<void>>();
+    expectTypeOf<IAdapterRegistry["dispose"]>().returns.toEqualTypeOf<Promise<void>>();
   });
 
   it("AdapterLifecycleEvent enumerates the lifecycle states", () => {

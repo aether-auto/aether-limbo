@@ -242,7 +242,33 @@ function registryWith(adapter: IAdapter): IAdapterRegistry {
   return {
     get: (id: string) => (id === "rec" ? adapter : undefined),
     list: () => [],
+    release: async (a: IAdapter) => {
+      await a.unmount();
+    },
+    dispose: async () => undefined,
   };
+}
+
+function registryWithKeepWarm(adapter: IAdapter): {
+  registry: IAdapterRegistry;
+  releasedAdapters: IAdapter[];
+} {
+  const releasedAdapters: IAdapter[] = [];
+  const cache = new Map<string, IAdapter>();
+  const registry: IAdapterRegistry = {
+    get: (id: string) => {
+      if (id !== "rec") return undefined;
+      return cache.get("rec") ?? adapter;
+    },
+    list: () => [],
+    release: async (a: IAdapter) => {
+      // keepWarm: cache without unmounting
+      cache.set("rec", a);
+      releasedAdapters.push(a);
+    },
+    dispose: async () => undefined,
+  };
+  return { registry, releasedAdapters };
 }
 
 describe("LimboOverlay adapter integration", () => {
@@ -271,6 +297,10 @@ describe("LimboOverlay adapter integration", () => {
     const registry: IAdapterRegistry = {
       get: () => (returnSecond ? a2 : a1),
       list: () => [],
+      release: async (a) => {
+        await a.unmount();
+      },
+      dispose: async () => undefined,
     };
     const overlay = new LimboOverlay({
       stdout,
@@ -285,6 +315,7 @@ describe("LimboOverlay adapter integration", () => {
     await Promise.resolve();
     returnSecond = true;
     overlay.handleInput("l");
+    await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
     expect(a1.unmountCalls).toBe(1);
@@ -332,6 +363,38 @@ describe("LimboOverlay adapter integration", () => {
     const overlay = new LimboOverlay({ stdout, detector });
     overlay.open();
     expect(stdout.buffer.join("")).toContain("adapter not yet implemented");
+  });
+
+  it("keepWarm=true: adapter.unmount() is NOT called when overlay closes; reopening mounts the same instance", async () => {
+    const detector = new FakeDetector();
+    const stdout = makeStdout();
+    const adapter = new RecordingAdapter();
+    const { registry } = registryWithKeepWarm(adapter);
+    const overlay = new LimboOverlay({
+      stdout,
+      detector,
+      registry,
+      tabs: [{ id: "__echo", label: "Echo", placeholderRef: "§4.11", adapterId: "rec" }],
+    });
+
+    // First open — adapter mounts
+    overlay.open();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(adapter.mountCalls).toBe(1);
+
+    // Close — keepWarm registry must NOT call unmount
+    overlay.close();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(adapter.unmountCalls).toBe(0);
+
+    // Reopen — registry.get() returns the same cached instance, mount() called again
+    overlay.open();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(adapter.mountCalls).toBe(2);
+    expect(adapter.unmountCalls).toBe(0);
   });
 
   it("force-unmounts an adapter whose mount() resolves AFTER close() runs (open/close race)", async () => {
@@ -400,7 +463,14 @@ describe("LimboOverlay enter routing", () => {
       handleKey: () => undefined,
       onEnter,
     };
-    const registry: IAdapterRegistry = { get: () => fake, list: () => [] };
+    const registry: IAdapterRegistry = {
+      get: () => fake,
+      list: () => [],
+      release: async (a) => {
+        await a.unmount();
+      },
+      dispose: async () => undefined,
+    };
     const stdout = makeStdout();
     const detector = new FakeDetector();
     const overlay = new LimboOverlay({
@@ -423,7 +493,14 @@ describe("LimboOverlay enter routing", () => {
       unmount: async () => undefined,
       handleKey: () => undefined,
     };
-    const registry: IAdapterRegistry = { get: () => fake, list: () => [] };
+    const registry: IAdapterRegistry = {
+      get: () => fake,
+      list: () => [],
+      release: async (a) => {
+        await a.unmount();
+      },
+      dispose: async () => undefined,
+    };
     const stdout = makeStdout();
     const detector = new FakeDetector();
     const overlay = new LimboOverlay({
@@ -543,7 +620,14 @@ describe("LimboOverlay captureInput seam", () => {
     const overlay = new LimboOverlay({
       stdout,
       detector,
-      registry: { get: () => capturingAdapter, list: () => [] },
+      registry: {
+        get: () => capturingAdapter,
+        list: () => [],
+        release: async (a: IAdapter) => {
+          await a.unmount();
+        },
+        dispose: async () => undefined,
+      },
       tabs: [{ id: "__echo", label: "Echo", placeholderRef: "§4.7", adapterId: "rec" }],
     });
     overlay.open();
@@ -569,7 +653,14 @@ describe("LimboOverlay captureInput seam", () => {
     const overlay = new LimboOverlay({
       stdout,
       detector,
-      registry: { get: () => passthroughAdapter, list: () => [] },
+      registry: {
+        get: () => passthroughAdapter,
+        list: () => [],
+        release: async (a: IAdapter) => {
+          await a.unmount();
+        },
+        dispose: async () => undefined,
+      },
       tabs: [{ id: "__echo", label: "Echo", placeholderRef: "§4.7", adapterId: "rec" }],
     });
     overlay.open();
@@ -592,7 +683,14 @@ describe("LimboOverlay captureInput seam", () => {
     const overlay = new LimboOverlay({
       stdout,
       detector,
-      registry: { get: () => plainAdapter, list: () => [] },
+      registry: {
+        get: () => plainAdapter,
+        list: () => [],
+        release: async (a: IAdapter) => {
+          await a.unmount();
+        },
+        dispose: async () => undefined,
+      },
       tabs: [{ id: "__echo", label: "Echo", placeholderRef: "§4.7", adapterId: "rec" }],
     });
     overlay.open();
