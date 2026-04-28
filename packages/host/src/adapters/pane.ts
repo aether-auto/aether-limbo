@@ -34,6 +34,10 @@ export class OverlayPane implements IPane {
     return Math.max(0, this.bottomRow_ - this.topRow_);
   }
 
+  get topRow(): number {
+    return this.topRow_;
+  }
+
   setLines(lines: readonly string[]): void {
     const { stdout } = this.opts;
     const w = this.cols;

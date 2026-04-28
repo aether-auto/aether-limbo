@@ -6,6 +6,7 @@ export type AdapterLifecycleEvent = "mounting" | "mounted" | "unmounting" | "unm
 export interface IPane {
   readonly cols: number;
   readonly rows: number;
+  readonly topRow: number;
   setLines(lines: readonly string[]): void;
   on(event: "resize", listener: (cols: number, rows: number) => void): IDisposable;
 }
