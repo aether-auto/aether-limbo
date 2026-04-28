@@ -7,10 +7,21 @@ without TikTokApi installed.
 Single sidecar covering the personalised For-You feed and per-video comments.
 Comment handlers degrade gracefully — when TikTokApi rejects the call (rate
 limit, auth issue, etc.) they return ``available: false`` instead of raising.
+
+Refresh-on-failure (§4.9 carry-over):
+    When ``LIMBO_TIKTOK_REFRESH_ON_FAILURE=1`` is set in the environment,
+    the first auth-like exception from ``feed/list`` triggers a single
+    transparent retry: the handler re-reads ``LIMBO_TIKTOK_MS_TOKEN`` from
+    env, calls ``create_sessions`` to establish a fresh session, then retries
+    the feed call once.  On retry success the result is returned normally; on
+    retry failure the existing token-form fallback path is used.  The guard
+    ``_refreshed_once_for_session`` prevents a second retry within the same
+    handler-set lifetime.
 """
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
@@ -41,6 +52,12 @@ def build_handlers(
         feed/list(_p)             -- fetch first ``count`` For-You feed videos
         feed/comments(p)          -- p = {"video_id": str}; degrade on failure
     """
+    # Refresh-on-failure flag: read once at handler-set construction time so
+    # that the env var is stable for the lifetime of this sidecar process.
+    _refresh_enabled: bool = os.environ.get("LIMBO_TIKTOK_REFRESH_ON_FAILURE", "") == "1"
+    # Per-session guard: allow at most one transparent retry per handler-set.
+    # Stored as a mutable container so the nested closure can mutate it.
+    _refresh_state: dict[str, bool] = {"attempted": False}
 
     def _serialize(result: LoginResult) -> dict[str, Any]:
         return {"status": result.status, "message": result.message}
@@ -66,10 +83,34 @@ def build_handlers(
         )
         return {"id": vid_id, "author": author, "caption": caption, "url": url}
 
-    def feed_list(_p: Any) -> dict[str, Any]:
+    def _fetch_feed() -> list[Any]:
+        """Run the feed async call and return raw video objects."""
         api = session.client
-        videos = _run(_take_async(api.user.feed(), count))  # type: ignore[attr-defined]
-        return {"items": [_video_to_item(v) for v in videos]}
+        return _run(_take_async(api.user.feed(), count))  # type: ignore[attr-defined]
+
+    def feed_list(_p: Any) -> dict[str, Any]:
+        try:
+            videos = _fetch_feed()
+            return {"items": [_video_to_item(v) for v in videos]}
+        except Exception:  # noqa: BLE001 — any failure is treated as auth-like
+            # Refresh-on-failure path: attempt once per session when enabled.
+            if _refresh_enabled and not _refresh_state["attempted"]:
+                _refresh_state["attempted"] = True
+                # Re-read token from env — the host may have updated secrets.toml
+                # and pushed the new value into the env before or during this call.
+                fresh_token = os.environ.get("LIMBO_TIKTOK_MS_TOKEN", "")
+                try:
+                    _run(
+                        session.client.create_sessions(  # type: ignore[attr-defined]
+                            ms_tokens=[fresh_token], num_sessions=1
+                        )
+                    )
+                    videos = _fetch_feed()
+                    return {"items": [_video_to_item(v) for v in videos]}
+                except Exception:  # noqa: BLE001 — retry also failed; fall through
+                    pass
+            # Fallback: surface the token form via the "failed" validate path.
+            return _serialize(LoginResult(status="failed", message="feed unavailable"))
 
     def _comment_to_item(c: Any) -> dict[str, Any]:
         from_user = str(getattr(c.author, "username", "") or "") if getattr(c, "author", None) is not None else ""
