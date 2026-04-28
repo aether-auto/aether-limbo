@@ -2,13 +2,15 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { stringify } from "@iarna/toml";
 import { configUsage, parseArgv } from "./cli/argv.js";
 import { runConfigEdit } from "./cli/config-edit.js";
 import { runWizard } from "./cli/wizard.js";
 import type { DEFAULT_CONFIG } from "./config/defaults.js";
 import { loadConfig } from "./config/loader.js";
-import { getConfigDir, getConfigPath, getSecretsPath } from "./config/paths.js";
+import { getConfigDir, getConfigPath, getDataDir, getSecretsPath } from "./config/paths.js";
 import { loadSecrets } from "./config/secrets.js";
 import { VERSION } from "./index.js";
 import { DEFAULT_TABS } from "./overlay/types.js";
@@ -140,6 +142,16 @@ async function main(argv: string[]): Promise<void> {
         }
       : undefined;
 
+  // Resolve the sidecar package path relative to this module's directory.
+  // In production: dist/cli.js → ../../sidecars (monorepo layout).
+  // In test/dev: src/cli.ts → ../../../sidecars (same relative depth).
+  const thisFile = fileURLToPath(import.meta.url);
+  const thisDir = path.dirname(thisFile);
+  // dist/cli.js is two levels below packages/host; sidecars is a sibling of host.
+  const packagePath = path.resolve(thisDir, "..", "..", "..", "sidecars");
+  const venvDir = path.join(getDataDir(process.env, home), "venv");
+  const pythonExe = process.env.LIMBO_PYTHON_EXE ?? "python3";
+
   const guard = new TerminalGuard({
     stdin: process.stdin,
     process,
@@ -166,6 +178,9 @@ async function main(argv: string[]): Promise<void> {
       adapterEnv,
       globalKeepWarm: config.adapters.keepWarm,
       tiktokKeepWarm: config.adapters.tiktok.keepWarm,
+      venvDir,
+      pythonExe,
+      packagePath,
     });
     guard.restore();
     process.exit(exitCode);

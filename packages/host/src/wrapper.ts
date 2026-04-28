@@ -1,5 +1,9 @@
-import { spawn as nodeSpawn } from "node:child_process";
+import { execFile, spawn as nodeSpawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
+import path from "node:path";
+import { promisify } from "node:util";
 import { CarbonylSubpane } from "./adapters/carbonyl-subpane.js";
 import { runDetached } from "./adapters/carbonyl.js";
 import { EchoAdapter } from "./adapters/echo-adapter.js";
@@ -9,7 +13,9 @@ import { InstagramReelsAdapter } from "./adapters/instagram/reels-adapter.js";
 import { SharedInstagramSidecar } from "./adapters/instagram/shared-sidecar.js";
 import { BuiltinAdapterRegistry } from "./adapters/registry.js";
 import { JsonRpcClient } from "./adapters/rpc/client.js";
+import { BootstrapRunner } from "./adapters/sidecar/bootstrap-runner.js";
 import { ChildProcessTransport } from "./adapters/sidecar/child-transport.js";
+import type { RunResult } from "./adapters/sidecar/venv.js";
 import {
   type SubPaneController,
   type SubPaneRect,
@@ -89,6 +95,22 @@ export interface RunWrapperOptions {
    * When true (or globalKeepWarm is true) the TikTok sidecar stays warm.
    */
   readonly tiktokKeepWarm?: boolean;
+  /**
+   * Directory where the shared venv should be created/maintained.
+   * When absent, bootstrap is skipped (assumes venv already exists or test env).
+   * Typically: getDataDir(env, home) + "/venv"
+   */
+  readonly venvDir?: string;
+  /**
+   * Python executable used to create the venv. Defaults to "python3".
+   * Override via LIMBO_PYTHON_EXE env var in cli.ts.
+   */
+  readonly pythonExe?: string;
+  /**
+   * Absolute path to the limbo-sidecars Python package (editable install target).
+   * Typically resolved relative to this package's installation directory.
+   */
+  readonly packagePath?: string;
 }
 
 const FORWARDED_SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
@@ -114,6 +136,15 @@ function defaultRegistry(opts: {
   globalKeepWarm?: boolean;
   /** TikTok-specific keepWarm from config.adapters.tiktok.keepWarm. */
   tiktokKeepWarm?: boolean;
+  /**
+   * Data directory for the venv bootstrap (e.g. ~/.local/share/aether-limbo).
+   * When absent, bootstrap is skipped (venv pre-exists or test environment).
+   */
+  venvDir?: string;
+  /** Python executable for the venv bootstrap; defaults to "python3". */
+  pythonExe?: string;
+  /** Package path for the sidecar package (editable install target). */
+  packagePath?: string;
 }): IAdapterRegistry {
   const carbonylBin = opts.env.LIMBO_CARBONYL_BIN ?? "carbonyl";
 
@@ -164,18 +195,64 @@ function defaultRegistry(opts: {
       ? { onCredentialsConfirmed: opts.onCredentialsConfirmed }
       : {};
 
+  // ---------------------------------------------------------------------------
+  // Bootstrap runner helpers (shared Filesystem + RunCommand implementations)
+  // ---------------------------------------------------------------------------
+  const makeBootstrapRunner = (extras: readonly string[]): BootstrapRunner | undefined => {
+    if (!opts.venvDir || !opts.packagePath) return undefined;
+    const venvDir = opts.venvDir;
+    const pythonExe = opts.pythonExe ?? "python3";
+    const packagePath = opts.packagePath;
+
+    return new BootstrapRunner({
+      venvDir,
+      pythonExe,
+      pythonVersion: opts.env.LIMBO_PYTHON_VERSION ?? "3.x",
+      packagePath,
+      fs: {
+        exists: async (p: string) => existsSync(p),
+        readFile: async (p: string) => readFile(p, "utf8"),
+        writeFile: async (p: string, content: string) => {
+          await mkdir(path.dirname(p), { recursive: true });
+          await writeFile(p, content, "utf8");
+        },
+      },
+      run: async (file: string, args: readonly string[]): Promise<RunResult> => {
+        const execFilePromise = promisify(execFile);
+        try {
+          await execFilePromise(file, [...args], { env: opts.env, cwd: opts.cwd });
+          return { code: 0 };
+        } catch (err) {
+          const e = err as { code?: number; stderr?: string };
+          const result: RunResult = { code: e.code ?? 1 };
+          if (e.stderr !== undefined) {
+            return { ...result, stderr: e.stderr };
+          }
+          return result;
+        }
+      },
+    });
+  };
+
   // One shared sidecar process for all three Instagram adapters.  The client
   // is lazy-initialised on first access and disposed by the registry's
   // dispose() path (called on wrapper exit).
+  const igRunner = makeBootstrapRunner(["instagram"]);
   const igSidecar = new SharedInstagramSidecar({
     env: adapterEnvFor("instagram-reels"), // ig env is shared across all three
     cwd: opts.cwd,
     spawn: nodeSpawn,
+    ...(igRunner !== undefined
+      ? { bootstrapRunner: igRunner, bootstrapExtras: ["instagram"] }
+      : {}),
   });
 
   // Instagram adapters always keep warm (shared sidecar bundle; cold-start is expensive).
   // Global keepWarm flag does not reduce this — IG is always true.
   const igKeepWarm = true;
+
+  // igSidecar opts for IG adapter construction
+  const igSidecarOpts = igSidecar.runner !== undefined ? { igSidecar } : {};
 
   const igReels: AdapterDescriptor = {
     id: "instagram-reels",
@@ -187,6 +264,7 @@ function defaultRegistry(opts: {
         client: igSidecar.client,
         runDetached: makeRunDetached(),
         ...credOpts,
+        ...igSidecarOpts,
       }),
   };
 
@@ -200,6 +278,7 @@ function defaultRegistry(opts: {
         client: igSidecar.client,
         runDetached: makeRunDetached(),
         ...credOpts,
+        ...igSidecarOpts,
       }),
   };
 
@@ -212,11 +291,13 @@ function defaultRegistry(opts: {
       new InstagramDmsAdapter({
         client: igSidecar.client,
         ...credOpts,
+        ...igSidecarOpts,
       }),
   };
 
   // Twitter: keepWarm defaults false; global flag can turn it on.
   const twitterKeepWarm = opts.globalKeepWarm === true;
+  const twitterRunner = makeBootstrapRunner(["twitter"]);
 
   const twitterHome: AdapterDescriptor = {
     id: "twitter-home",
@@ -225,7 +306,7 @@ function defaultRegistry(opts: {
     keepWarm: twitterKeepWarm,
     create: (): IAdapter => {
       const transport = new ChildProcessTransport({
-        pythonExe: "python3",
+        pythonExe: opts.pythonExe ?? "python3",
         args: ["-m", "limbo_sidecars", "twitter-home"],
         env: adapterEnvFor("twitter-home"),
         cwd: opts.cwd,
@@ -235,12 +316,16 @@ function defaultRegistry(opts: {
         client: new JsonRpcClient(transport),
         runDetached: makeRunDetached(),
         ...credOpts,
+        ...(twitterRunner !== undefined
+          ? { bootstrapRunner: twitterRunner, bootstrapExtras: ["twitter"] }
+          : {}),
       });
     },
   };
 
   // TikTok: keepWarm = tiktokKeepWarm || globalKeepWarm (union — either turns it on).
   const tiktokKeepWarm = opts.tiktokKeepWarm === true || opts.globalKeepWarm === true;
+  const tiktokRunner = makeBootstrapRunner(["tiktok"]);
 
   const tiktokForYou: AdapterDescriptor = {
     id: "tiktok-foryou",
@@ -249,7 +334,7 @@ function defaultRegistry(opts: {
     keepWarm: tiktokKeepWarm,
     create: (): IAdapter => {
       const transport = new ChildProcessTransport({
-        pythonExe: "python3",
+        pythonExe: opts.pythonExe ?? "python3",
         args: ["-m", "limbo_sidecars", "tiktok-foryou"],
         env: adapterEnvFor("tiktok-foryou"),
         cwd: opts.cwd,
@@ -259,6 +344,9 @@ function defaultRegistry(opts: {
         client: new JsonRpcClient(transport),
         runSubPane: makeRunSubPane(),
         ...credOpts,
+        ...(tiktokRunner !== undefined
+          ? { bootstrapRunner: tiktokRunner, bootstrapExtras: ["tiktok"] }
+          : {}),
       });
     },
   };
@@ -377,6 +465,9 @@ export function runWrapper(opts: RunWrapperOptions): Promise<number> {
       ...(opts.adapterEnv !== undefined ? { adapterEnv: opts.adapterEnv } : {}),
       ...(opts.globalKeepWarm !== undefined ? { globalKeepWarm: opts.globalKeepWarm } : {}),
       ...(opts.tiktokKeepWarm !== undefined ? { tiktokKeepWarm: opts.tiktokKeepWarm } : {}),
+      ...(opts.venvDir !== undefined ? { venvDir: opts.venvDir } : {}),
+      ...(opts.pythonExe !== undefined ? { pythonExe: opts.pythonExe } : {}),
+      ...(opts.packagePath !== undefined ? { packagePath: opts.packagePath } : {}),
     });
   const tabs: readonly TabDefinition[] = opts.tabs ?? defaultTabs(opts.env);
 

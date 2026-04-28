@@ -1,9 +1,11 @@
 import type { LimboSecrets } from "../../config/secrets.js";
 import type { KeyAction } from "../../overlay/types.js";
 import type { IDisposable } from "../../pty/types.js";
+import { BootstrapPanel } from "../bootstrap-panel.js";
 import type { JsonRpcClient } from "../rpc/client.js";
 import type { IAdapter, IPane } from "../types.js";
 import { LoginForm } from "./login-form.js";
+import type { SharedInstagramSidecar } from "./shared-sidecar.js";
 
 // ---------------------------------------------------------------------------
 // RPC result shapes
@@ -38,6 +40,12 @@ export interface InstagramReelsAdapterOptions {
   readonly client: JsonRpcClient;
   readonly runDetached: (url: string) => Promise<void>;
   readonly onCredentialsConfirmed?: (secrets: Partial<LimboSecrets>) => void;
+  /**
+   * Shared sidecar reference used for bootstrap wiring. When provided,
+   * mount() will run the venv bootstrap (if needed) before calling RPC,
+   * streaming progress into a BootstrapPanel.
+   */
+  readonly igSidecar?: SharedInstagramSidecar;
 }
 
 // ---------------------------------------------------------------------------
@@ -68,6 +76,45 @@ export class InstagramReelsAdapter implements IAdapter {
     this.pane = pane;
     this.form = this._makeLoginForm();
     this.subs.push(pane.on("resize", () => this.repaint()));
+
+    // ---------------------------------------------------------------------------
+    // Bootstrap phase: run only when a shared sidecar with a runner is wired in
+    // and the venv has not been prepared yet.
+    // ---------------------------------------------------------------------------
+    const runner = this.opts.igSidecar?.runner;
+    if (runner && runner.status !== "ready") {
+      const panel = new BootstrapPanel();
+      panel.attach(pane);
+      panel.start("Preparing dependencies for Instagram…");
+
+      const unsubProgress = runner.onProgress((p) => {
+        switch (p.phase) {
+          case "creating-venv":
+            panel.update("creating virtual environment…");
+            break;
+          case "installing-package":
+            panel.update("installing instagrapi…");
+            break;
+          case "writing-manifest":
+            panel.update("finalising installation…");
+            break;
+          case "done":
+            panel.update("done");
+            break;
+        }
+      });
+
+      try {
+        await this.opts.igSidecar?.ensureBootstrap();
+      } catch (err) {
+        unsubProgress();
+        const msg = err instanceof Error ? err.message : String(err);
+        panel.error(msg);
+        return; // stay on error screen; user navigates away with q/h/l
+      }
+      unsubProgress();
+      // fall through to RPC mount below
+    }
 
     let validateResult: ValidateResult;
     try {

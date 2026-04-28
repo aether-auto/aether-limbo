@@ -1,7 +1,9 @@
 import type { LimboSecrets } from "../../config/secrets.js";
 import type { KeyAction } from "../../overlay/types.js";
 import type { IDisposable } from "../../pty/types.js";
+import { BootstrapPanel } from "../bootstrap-panel.js";
 import type { JsonRpcClient } from "../rpc/client.js";
+import type { BootstrapRunner } from "../sidecar/bootstrap-runner.js";
 import type { IAdapter, IPane } from "../types.js";
 import { TokenForm } from "./token-form.js";
 
@@ -65,6 +67,14 @@ export interface TikTokForYouAdapterOptions {
   readonly client: JsonRpcClient;
   readonly runSubPane: (url: string, rect: SubPaneRect) => SubPaneController;
   readonly onCredentialsConfirmed?: (secrets: Partial<LimboSecrets>) => void;
+  /**
+   * Optional bootstrap runner for the tiktok extras. When provided and the venv
+   * is not yet ready, mount() shows a BootstrapPanel while installing, then
+   * falls through to the normal RPC-driven mount.
+   */
+  readonly bootstrapRunner?: BootstrapRunner;
+  /** Extras forwarded to bootstrapRunner.ensure(); defaults to ["tiktok"]. */
+  readonly bootstrapExtras?: readonly string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -111,6 +121,46 @@ export class TikTokForYouAdapter implements IAdapter {
     this.pane = pane;
     this.tokenForm = this._makeTokenForm();
     this.subs.push(pane.on("resize", () => this.repaint()));
+
+    // ---------------------------------------------------------------------------
+    // Bootstrap phase: lazy venv install for tiktok extras.
+    // BootstrapRunner.ensure() short-circuits immediately when the manifest is current.
+    // ---------------------------------------------------------------------------
+    const runner = this.opts.bootstrapRunner;
+    if (runner && runner.status !== "ready") {
+      const panel = new BootstrapPanel();
+      panel.attach(pane);
+      panel.start("Preparing dependencies for TikTok…");
+
+      const extras: readonly string[] = this.opts.bootstrapExtras ?? ["tiktok"];
+      const unsubProgress = runner.onProgress((p) => {
+        switch (p.phase) {
+          case "creating-venv":
+            panel.update("creating virtual environment…");
+            break;
+          case "installing-package":
+            panel.update("installing playwright…");
+            break;
+          case "writing-manifest":
+            panel.update("finalising installation…");
+            break;
+          case "done":
+            panel.update("done");
+            break;
+        }
+      });
+
+      try {
+        await runner.ensure(extras);
+      } catch (err) {
+        unsubProgress();
+        const msg = err instanceof Error ? err.message : String(err);
+        panel.error(msg);
+        return; // stay on error screen; user navigates away with q/h/l
+      }
+      unsubProgress();
+      // fall through to RPC mount below
+    }
 
     let validateResult: ValidateResult;
     try {

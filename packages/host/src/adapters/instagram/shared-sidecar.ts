@@ -1,5 +1,6 @@
 import { spawn as nodeSpawn } from "node:child_process";
 import { JsonRpcClient } from "../rpc/client.js";
+import type { BootstrapRunner } from "../sidecar/bootstrap-runner.js";
 import type { SpawnLike } from "../sidecar/child-transport.js";
 import { ChildProcessTransport } from "../sidecar/child-transport.js";
 
@@ -11,6 +12,12 @@ import { ChildProcessTransport } from "../sidecar/child-transport.js";
 // The transport+client pair is created on first access and torn down by
 // dispose(), which is called by BuiltinAdapterRegistry.dispose() when the
 // registry is shut down (i.e. on wrapper exit).
+//
+// Bootstrap wiring (Phase 8):
+//   If a BootstrapRunner is supplied, whichever IG adapter mounts first calls
+//   ensureBootstrap(); the runner deduplicates concurrent callers so bootstrap
+//   runs exactly once. All three adapters subscribe via runner.onProgress()
+//   before calling ensureBootstrap() so they each see progress lines.
 // ---------------------------------------------------------------------------
 
 export interface SharedInstagramSidecarOptions {
@@ -18,11 +25,27 @@ export interface SharedInstagramSidecarOptions {
   readonly env: NodeJS.ProcessEnv;
   readonly cwd: string;
   readonly spawn?: SpawnLike;
+  /**
+   * Optional pre-built BootstrapRunner. When provided the first IG adapter to
+   * mount triggers venv bootstrap; the rest await the same promise.
+   * Extras to pass to runner.ensure() default to ["instagram"].
+   */
+  readonly bootstrapRunner?: BootstrapRunner;
+  /** Extras forwarded to bootstrapRunner.ensure(); defaults to ["instagram"]. */
+  readonly bootstrapExtras?: readonly string[];
 }
 
 export class SharedInstagramSidecar {
   private _client: JsonRpcClient | undefined;
-  private readonly opts: Required<SharedInstagramSidecarOptions>;
+  private readonly opts: Required<
+    Omit<SharedInstagramSidecarOptions, "bootstrapRunner" | "bootstrapExtras">
+  > & {
+    readonly bootstrapRunner: BootstrapRunner | undefined;
+    readonly bootstrapExtras: readonly string[];
+  };
+
+  /** Exposed so IG adapters can subscribe to progress events. */
+  readonly runner: BootstrapRunner | undefined;
 
   constructor(opts: SharedInstagramSidecarOptions) {
     this.opts = {
@@ -30,7 +53,19 @@ export class SharedInstagramSidecar {
       env: opts.env,
       cwd: opts.cwd,
       spawn: opts.spawn ?? nodeSpawn,
+      bootstrapRunner: opts.bootstrapRunner,
+      bootstrapExtras: opts.bootstrapExtras ?? ["instagram"],
     };
+    this.runner = opts.bootstrapRunner;
+  }
+
+  /**
+   * Ensure the venv is bootstrapped. No-op when no runner was provided.
+   * Concurrent callers share the same promise — bootstrap runs exactly once.
+   */
+  async ensureBootstrap(): Promise<void> {
+    if (!this.opts.bootstrapRunner) return;
+    return this.opts.bootstrapRunner.ensure(this.opts.bootstrapExtras);
   }
 
   /** Returns the shared client, lazily creating the child process on first call. */

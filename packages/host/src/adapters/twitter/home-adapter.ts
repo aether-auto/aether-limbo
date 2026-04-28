@@ -1,8 +1,10 @@
 import type { LimboSecrets } from "../../config/secrets.js";
 import type { KeyAction } from "../../overlay/types.js";
 import type { IDisposable } from "../../pty/types.js";
+import { BootstrapPanel } from "../bootstrap-panel.js";
 import { LoginForm } from "../instagram/login-form.js";
 import type { JsonRpcClient } from "../rpc/client.js";
+import type { BootstrapRunner } from "../sidecar/bootstrap-runner.js";
 import type { IAdapter, IPane } from "../types.js";
 
 // ---------------------------------------------------------------------------
@@ -67,6 +69,15 @@ export interface TwitterHomeAdapterOptions {
   readonly client: JsonRpcClient;
   readonly runDetached: (url: string) => Promise<void>;
   readonly onCredentialsConfirmed?: (secrets: Partial<LimboSecrets>) => void;
+  /**
+   * Optional bootstrap runner for the twitter extras. When provided and the
+   * venv is not yet ready, mount() shows a BootstrapPanel while installing,
+   * then falls through to the normal RPC-driven mount.
+   * VenvBootstrap.ensure() short-circuits immediately when manifest is current.
+   */
+  readonly bootstrapRunner?: BootstrapRunner;
+  /** Extras forwarded to bootstrapRunner.ensure(); defaults to ["twitter"]. */
+  readonly bootstrapExtras?: readonly string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -115,6 +126,46 @@ export class TwitterHomeAdapter implements IAdapter {
     this.pane = pane;
     this.loginForm = this._makeLoginForm();
     this.subs.push(pane.on("resize", () => this.repaint()));
+
+    // ---------------------------------------------------------------------------
+    // Bootstrap phase: lazy venv install for twitter extras.
+    // BootstrapRunner.ensure() short-circuits immediately when the manifest is current.
+    // ---------------------------------------------------------------------------
+    const runner = this.opts.bootstrapRunner;
+    if (runner && runner.status !== "ready") {
+      const panel = new BootstrapPanel();
+      panel.attach(pane);
+      panel.start("Preparing dependencies for X…");
+
+      const extras: readonly string[] = this.opts.bootstrapExtras ?? ["twitter"];
+      const unsubProgress = runner.onProgress((p) => {
+        switch (p.phase) {
+          case "creating-venv":
+            panel.update("creating virtual environment…");
+            break;
+          case "installing-package":
+            panel.update("installing twikit…");
+            break;
+          case "writing-manifest":
+            panel.update("finalising installation…");
+            break;
+          case "done":
+            panel.update("done");
+            break;
+        }
+      });
+
+      try {
+        await runner.ensure(extras);
+      } catch (err) {
+        unsubProgress();
+        const msg = err instanceof Error ? err.message : String(err);
+        panel.error(msg);
+        return; // stay on error screen; user navigates away with q/h/l
+      }
+      unsubProgress();
+      // fall through to RPC mount below
+    }
 
     let validateResult: ValidateResult;
     try {
@@ -437,7 +488,9 @@ export class TwitterHomeAdapter implements IAdapter {
   private _makeLoginForm(): LoginForm {
     return new LoginForm({
       onCredentialsConfirmed: (creds) =>
-        this.opts.onCredentialsConfirmed?.({ twitter: { username: creds.username, password: creds.password } }),
+        this.opts.onCredentialsConfirmed?.({
+          twitter: { username: creds.username, password: creds.password },
+        }),
     });
   }
 
