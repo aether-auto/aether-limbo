@@ -1,3 +1,4 @@
+import type { LimboSecrets } from "../../config/secrets.js";
 import type { KeyAction } from "../../overlay/types.js";
 import type { IDisposable } from "../../pty/types.js";
 import type { JsonRpcClient } from "../rpc/client.js";
@@ -63,6 +64,7 @@ export interface SubPaneController {
 export interface TikTokForYouAdapterOptions {
   readonly client: JsonRpcClient;
   readonly runSubPane: (url: string, rect: SubPaneRect) => SubPaneController;
+  readonly onCredentialsConfirmed?: (secrets: Partial<LimboSecrets>) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -82,6 +84,7 @@ export class TikTokForYouAdapter implements IAdapter {
   private subs: IDisposable[] = [];
 
   private mode: Mode = "loading";
+  // Properly initialized in mount() via _makeTokenForm(); placeholder avoids undefined.
   private tokenForm: TokenForm = new TokenForm();
 
   private feed: readonly VideoItem[] = [];
@@ -106,6 +109,7 @@ export class TikTokForYouAdapter implements IAdapter {
 
   async mount(pane: IPane): Promise<void> {
     this.pane = pane;
+    this.tokenForm = this._makeTokenForm();
     this.subs.push(pane.on("resize", () => this.repaint()));
 
     let validateResult: ValidateResult;
@@ -113,7 +117,7 @@ export class TikTokForYouAdapter implements IAdapter {
       validateResult = (await this.opts.client.request("validate", undefined)) as ValidateResult;
     } catch {
       this.mode = "token";
-      this.tokenForm = new TokenForm();
+      this.tokenForm = this._makeTokenForm();
       this.tokenForm.setMessage("connection error");
       this.repaint();
       return;
@@ -148,11 +152,11 @@ export class TikTokForYouAdapter implements IAdapter {
       void this.loadFeed();
     } else if (result.status === "login_required") {
       this.mode = "token";
-      this.tokenForm = new TokenForm();
+      this.tokenForm = this._makeTokenForm();
       this.repaint();
     } else {
       this.mode = "token";
-      this.tokenForm = new TokenForm();
+      this.tokenForm = this._makeTokenForm();
       this.tokenForm.setMessage(result.message ?? `validate: ${result.status}`);
       this.repaint();
     }
@@ -167,7 +171,7 @@ export class TikTokForYouAdapter implements IAdapter {
       this.repaint();
     } catch {
       this.mode = "token";
-      this.tokenForm = new TokenForm();
+      this.tokenForm = this._makeTokenForm();
       this.tokenForm.setMessage("failed to load feed");
       this.repaint();
     }
@@ -338,6 +342,12 @@ export class TikTokForYouAdapter implements IAdapter {
   // -------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------
+
+  private _makeTokenForm(): TokenForm {
+    return new TokenForm({
+      onCredentialsConfirmed: (s) => this.opts.onCredentialsConfirmed?.(s),
+    });
+  }
 
   private stopSubPane(): void {
     if (this.subPaneSub) {

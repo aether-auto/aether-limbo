@@ -1,8 +1,9 @@
+import type { LimboSecrets } from "../../config/secrets.js";
 import type { KeyAction } from "../../overlay/types.js";
 import type { IDisposable } from "../../pty/types.js";
-import { LoginForm } from "./login-form.js";
 import type { JsonRpcClient } from "../rpc/client.js";
 import type { IAdapter, IPane } from "../types.js";
+import { LoginForm } from "./login-form.js";
 
 // ---------------------------------------------------------------------------
 // RPC result shapes
@@ -36,6 +37,7 @@ interface MediaListResult {
 export interface InstagramReelsAdapterOptions {
   readonly client: JsonRpcClient;
   readonly runDetached: (url: string) => Promise<void>;
+  readonly onCredentialsConfirmed?: (secrets: Partial<LimboSecrets>) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -55,6 +57,7 @@ export class InstagramReelsAdapter implements IAdapter {
   private subs: IDisposable[] = [];
 
   private mode: Mode = "loading";
+  // Properly initialized in mount() via _makeLoginForm(); placeholder avoids undefined.
   private form: LoginForm = new LoginForm();
   private items: readonly ReelItem[] = [];
   private selected = 0;
@@ -63,17 +66,15 @@ export class InstagramReelsAdapter implements IAdapter {
 
   async mount(pane: IPane): Promise<void> {
     this.pane = pane;
+    this.form = this._makeLoginForm();
     this.subs.push(pane.on("resize", () => this.repaint()));
 
     let validateResult: ValidateResult;
     try {
-      validateResult = (await this.opts.client.request(
-        "validate",
-        undefined,
-      )) as ValidateResult;
+      validateResult = (await this.opts.client.request("validate", undefined)) as ValidateResult;
     } catch {
       this.mode = "login";
-      this.form = new LoginForm();
+      this.form = this._makeLoginForm();
       this.form.setMessage("connection error");
       this.repaint();
       return;
@@ -89,12 +90,12 @@ export class InstagramReelsAdapter implements IAdapter {
       await this.loadMediaList();
     } else if (result.status === "login_required") {
       this.mode = "login";
-      this.form = new LoginForm();
+      this.form = this._makeLoginForm();
       this.repaint();
     } else {
       // "failed" | "2fa_required" or anything unexpected
       this.mode = "login";
-      this.form = new LoginForm();
+      this.form = this._makeLoginForm();
       if (result.message) {
         this.form.setMessage(result.message);
       } else {
@@ -106,17 +107,14 @@ export class InstagramReelsAdapter implements IAdapter {
 
   private async loadMediaList(): Promise<void> {
     try {
-      const result = (await this.opts.client.request(
-        "media/list",
-        undefined,
-      )) as MediaListResult;
+      const result = (await this.opts.client.request("media/list", undefined)) as MediaListResult;
       this.items = result.items;
       this.selected = 0;
       this.mode = "list";
       this.repaint();
     } catch {
       this.mode = "login";
-      this.form = new LoginForm();
+      this.form = this._makeLoginForm();
       this.form.setMessage("failed to load reels");
       this.repaint();
     }
@@ -170,7 +168,7 @@ export class InstagramReelsAdapter implements IAdapter {
       this.form.setRequires2fa(true);
       this.repaint();
     } else if (result.status === "login_required") {
-      this.form = new LoginForm();
+      this.form = this._makeLoginForm();
       this.mode = "login";
       this.repaint();
     } else {
@@ -182,6 +180,13 @@ export class InstagramReelsAdapter implements IAdapter {
       }
       this.repaint();
     }
+  }
+
+  private _makeLoginForm(): LoginForm {
+    return new LoginForm({
+      onCredentialsConfirmed: (creds) =>
+        this.opts.onCredentialsConfirmed?.({ instagram: creds }),
+    });
   }
 
   handleKey(action: KeyAction): void {
@@ -223,11 +228,7 @@ export class InstagramReelsAdapter implements IAdapter {
     }
 
     if (this.mode === "login") {
-      this.pane.setLines([
-        "[ Instagram login ]",
-        "",
-        ...this.form.renderLines(this.pane.cols),
-      ]);
+      this.pane.setLines(["[ Instagram login ]", "", ...this.form.renderLines(this.pane.cols)]);
       return;
     }
 

@@ -1,15 +1,30 @@
+import type { LimboSecrets } from "../../config/secrets.js";
+
 export interface TokenFormSnapshot {
   readonly token: string;
   readonly message: string | undefined;
+  readonly rememberMe: boolean;
 }
 
 export type TokenFormAction =
   | { kind: "submit"; payload: { ms_token: string } }
   | { kind: "cancel" };
 
+export interface TokenFormOptions {
+  /** Called on successful submit when rememberMe is true. */
+  onCredentialsConfirmed?: (secrets: Partial<LimboSecrets>) => void;
+}
+
 export class TokenForm {
   private _token = "";
   private _message: string | undefined = undefined;
+  private _rememberMe = false;
+
+  private readonly _onCredentialsConfirmed: ((secrets: Partial<LimboSecrets>) => void) | undefined;
+
+  constructor(opts?: TokenFormOptions) {
+    this._onCredentialsConfirmed = opts?.onCredentialsConfirmed;
+  }
 
   feed(chunk: string): TokenFormAction | undefined {
     for (const ch of chunk) {
@@ -17,6 +32,11 @@ export class TokenForm {
 
       if (ch === "\r" || ch === "\n") {
         if (this._token.length > 0) {
+          if (this._rememberMe) {
+            this._onCredentialsConfirmed?.({
+              tiktok: { msToken: this._token },
+            });
+          }
           return { kind: "submit", payload: { ms_token: this._token } };
         }
         this._message = "ms_token required";
@@ -40,6 +60,13 @@ export class TokenForm {
         continue;
       }
 
+      // 'm' key toggles remember-me (mnemonic: m = memorise).
+      // Handled before printable-char append so it doesn't land in the token.
+      if (ch === "m") {
+        this._rememberMe = !this._rememberMe;
+        continue;
+      }
+
       // Printable: 0x20–0x7e
       if (code >= 0x20 && code <= 0x7e) {
         this._token += ch;
@@ -58,6 +85,7 @@ export class TokenForm {
     return {
       token: this._token,
       message: this._message,
+      rememberMe: this._rememberMe,
     };
   }
 
@@ -65,12 +93,15 @@ export class TokenForm {
     const trunc = (s: string): string => s.slice(0, cols);
 
     const masked = this._maskToken(this._token);
+    const rmBox = this._rememberMe ? "[x]" : "[ ]";
 
     const lines: string[] = [
       trunc("[ TikTok session ]"),
       trunc(""),
       trunc("Paste ms_token cookie:"),
       trunc(`→ ms_token: ${masked}`),
+      trunc(""),
+      trunc(`${rmBox} remember me  (m: toggle)`),
       trunc(""),
       trunc("Enter: submit   Esc: cancel"),
     ];

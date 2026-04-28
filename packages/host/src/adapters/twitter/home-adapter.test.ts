@@ -324,4 +324,35 @@ describe("TwitterHomeAdapter", () => {
     await adapter.unmount();
     expect(t.closed).toBe(true);
   });
+
+  it("rememberMe=true on login maps creds into twitter namespace via onCredentialsConfirmed", async () => {
+    const stdout = makeStdout();
+    const pane = new OverlayPane({ stdout, topRow: 2, bottomRow: 22 });
+    const t = new PairedTransport();
+    const confirmedPayloads: unknown[] = [];
+    const adapter = new TwitterHomeAdapter({
+      client: new JsonRpcClient(t),
+      runDetached: vi.fn().mockResolvedValue(undefined),
+      onCredentialsConfirmed: (s) => confirmedPayloads.push(s),
+    });
+
+    const mountP = adapter.mount(pane);
+    t.resolve({ status: "login_required" });
+    await mountP;
+    await Promise.resolve();
+
+    // Fill username, password, navigate to submit, enable rememberMe, submit
+    adapter.captureInput?.("xuser");
+    adapter.captureInput?.("\t"); // → password
+    adapter.captureInput?.("xpass");
+    adapter.captureInput?.("\t"); // → submit
+    adapter.captureInput?.("m"); // toggle rememberMe
+    adapter.captureInput?.("\r"); // submit
+
+    // onCredentialsConfirmed fires synchronously inside trySubmit
+    expect(confirmedPayloads).toHaveLength(1);
+    expect(confirmedPayloads[0]).toEqual({
+      twitter: { username: "xuser", password: "xpass" },
+    });
+  });
 });

@@ -1,3 +1,4 @@
+import type { LimboSecrets } from "../../config/secrets.js";
 import type { KeyAction } from "../../overlay/types.js";
 import type { IDisposable } from "../../pty/types.js";
 import { LoginForm } from "../instagram/login-form.js";
@@ -65,6 +66,7 @@ interface DmMessagesResult {
 export interface TwitterHomeAdapterOptions {
   readonly client: JsonRpcClient;
   readonly runDetached: (url: string) => Promise<void>;
+  readonly onCredentialsConfirmed?: (secrets: Partial<LimboSecrets>) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -84,6 +86,7 @@ export class TwitterHomeAdapter implements IAdapter {
   private subs: IDisposable[] = [];
 
   private mode: Mode = "loading";
+  // Initialized properly in mount() via _makeLoginForm(); placeholder avoids undefined.
   private loginForm: LoginForm = new LoginForm();
 
   private timeline: readonly TweetItem[] = [];
@@ -110,6 +113,7 @@ export class TwitterHomeAdapter implements IAdapter {
 
   async mount(pane: IPane): Promise<void> {
     this.pane = pane;
+    this.loginForm = this._makeLoginForm();
     this.subs.push(pane.on("resize", () => this.repaint()));
 
     let validateResult: ValidateResult;
@@ -117,7 +121,7 @@ export class TwitterHomeAdapter implements IAdapter {
       validateResult = (await this.opts.client.request("validate", undefined)) as ValidateResult;
     } catch {
       this.mode = "login";
-      this.loginForm = new LoginForm();
+      this.loginForm = this._makeLoginForm();
       this.loginForm.setMessage("connection error");
       this.repaint();
       return;
@@ -144,11 +148,11 @@ export class TwitterHomeAdapter implements IAdapter {
       await this.loadTimeline();
     } else if (result.status === "login_required") {
       this.mode = "login";
-      this.loginForm = new LoginForm();
+      this.loginForm = this._makeLoginForm();
       this.repaint();
     } else {
       this.mode = "login";
-      this.loginForm = new LoginForm();
+      this.loginForm = this._makeLoginForm();
       this.loginForm.setMessage(result.message ?? `validate: ${result.status}`);
       this.repaint();
     }
@@ -163,7 +167,7 @@ export class TwitterHomeAdapter implements IAdapter {
       this.loginForm.setRequires2fa(true);
       this.repaint();
     } else if (result.status === "login_required") {
-      this.loginForm = new LoginForm();
+      this.loginForm = this._makeLoginForm();
       this.mode = "login";
       this.repaint();
     } else {
@@ -181,7 +185,7 @@ export class TwitterHomeAdapter implements IAdapter {
       this.repaint();
     } catch {
       this.mode = "login";
-      this.loginForm = new LoginForm();
+      this.loginForm = this._makeLoginForm();
       this.loginForm.setMessage("failed to load timeline");
       this.repaint();
     }
@@ -429,6 +433,13 @@ export class TwitterHomeAdapter implements IAdapter {
   // -------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------
+
+  private _makeLoginForm(): LoginForm {
+    return new LoginForm({
+      onCredentialsConfirmed: (creds) =>
+        this.opts.onCredentialsConfirmed?.({ twitter: { username: creds.username, password: creds.password } }),
+    });
+  }
 
   private fireLike(): void {
     const tweet = this.timeline[this.selectedTweet];

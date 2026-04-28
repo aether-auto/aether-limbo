@@ -7,11 +7,20 @@ export interface LoginSnapshot {
   readonly twoFactor: string;
   readonly message: string | undefined;
   readonly requires2fa: boolean;
+  readonly rememberMe: boolean;
 }
 
 export type LoginAction =
   | { kind: "submit"; payload: { username: string; password: string } }
   | { kind: "submit2fa"; payload: { username: string; password: string; code: string } };
+
+export interface LoginFormOptions {
+  /**
+   * Called on successful login when rememberMe is true.
+   * Receives plain credentials — the adapter wraps them into the correct LimboSecrets namespace.
+   */
+  onCredentialsConfirmed?: (creds: { username: string; password: string }) => void;
+}
 
 export class LoginForm {
   private _field: LoginField = "username";
@@ -20,6 +29,15 @@ export class LoginForm {
   private _twoFactor = "";
   private _message: string | undefined = undefined;
   private _requires2fa = false;
+  private _rememberMe = false;
+
+  private readonly _onCredentialsConfirmed:
+    | ((creds: { username: string; password: string }) => void)
+    | undefined;
+
+  constructor(opts?: LoginFormOptions) {
+    this._onCredentialsConfirmed = opts?.onCredentialsConfirmed;
+  }
 
   private activeFields(): LoginField[] {
     if (this._requires2fa) {
@@ -36,19 +54,30 @@ export class LoginForm {
 
   private getFieldValue(field: LoginField): string {
     switch (field) {
-      case "username": return this._username;
-      case "password": return this._password;
-      case "twoFactor": return this._twoFactor;
-      case "submit": return "";
+      case "username":
+        return this._username;
+      case "password":
+        return this._password;
+      case "twoFactor":
+        return this._twoFactor;
+      case "submit":
+        return "";
     }
   }
 
   private setFieldValue(field: LoginField, value: string): void {
     switch (field) {
-      case "username": this._username = value; break;
-      case "password": this._password = value; break;
-      case "twoFactor": this._twoFactor = value; break;
-      case "submit": break;
+      case "username":
+        this._username = value;
+        break;
+      case "password":
+        this._password = value;
+        break;
+      case "twoFactor":
+        this._twoFactor = value;
+        break;
+      case "submit":
+        break;
     }
   }
 
@@ -62,6 +91,9 @@ export class LoginForm {
       return undefined;
     }
     this._message = undefined;
+    if (this._rememberMe) {
+      this._onCredentialsConfirmed?.({ username: this._username, password: this._password });
+    }
     if (this._requires2fa) {
       return {
         kind: "submit2fa",
@@ -107,12 +139,18 @@ export class LoginForm {
         continue;
       }
 
+      // 'm' key toggles remember-me (mnemonic: m = memorise).
+      // Only active when on submit field to avoid interfering with text entry.
+      if (ch === "m" && this._field === "submit") {
+        this._rememberMe = !this._rememberMe;
+        continue;
+      }
+
       // Printable: 0x20–0x7e
       if (code >= 0x20 && code <= 0x7e) {
         if (this._field !== "submit") {
           this.setFieldValue(this._field, this.getFieldValue(this._field) + ch);
         }
-        continue;
       }
 
       // Other control bytes: silently ignore
@@ -140,6 +178,7 @@ export class LoginForm {
       twoFactor: this._twoFactor,
       message: this._message,
       requires2fa: this._requires2fa,
+      rememberMe: this._rememberMe,
     };
   }
 
@@ -151,27 +190,23 @@ export class LoginForm {
     const lines: string[] = [];
 
     // Username line
-    lines.push(
-      trunc(`${arrow(this._field === "username")} Username: ${this._username}`),
-    );
+    lines.push(trunc(`${arrow(this._field === "username")} Username: ${this._username}`));
 
     // Password line (masked)
     const masked = "*".repeat(this._password.length);
-    lines.push(
-      trunc(`${arrow(this._field === "password")} Password: ${masked}`),
-    );
+    lines.push(trunc(`${arrow(this._field === "password")} Password: ${masked}`));
 
     // 2FA line (only when requires2fa)
     if (this._requires2fa) {
-      lines.push(
-        trunc(`${arrow(this._field === "twoFactor")} 2FA code: ${this._twoFactor}`),
-      );
+      lines.push(trunc(`${arrow(this._field === "twoFactor")} 2FA code: ${this._twoFactor}`));
     }
 
     // Submit line
-    lines.push(
-      trunc(`${arrow(this._field === "submit")} [ Submit ]   (Tab/Enter to navigate)`),
-    );
+    lines.push(trunc(`${arrow(this._field === "submit")} [ Submit ]   (Tab/Enter to navigate)`));
+
+    // Remember-me toggle (m key when on submit)
+    const rmBox = this._rememberMe ? "[x]" : "[ ]";
+    lines.push(trunc(`  ${rmBox} remember me  (m: toggle)`));
 
     // Message line
     if (this._message !== undefined) {

@@ -1,4 +1,5 @@
 import { spawn as nodeSpawn } from "node:child_process";
+import { homedir } from "node:os";
 import { CarbonylSubpane } from "./adapters/carbonyl-subpane.js";
 import { runDetached } from "./adapters/carbonyl.js";
 import { EchoAdapter } from "./adapters/echo-adapter.js";
@@ -15,6 +16,14 @@ import {
 } from "./adapters/tiktok/foryou-adapter.js";
 import { TwitterHomeAdapter } from "./adapters/twitter/home-adapter.js";
 import type { AdapterDescriptor, IAdapter, IAdapterRegistry } from "./adapters/types.js";
+import { getSecretsPath } from "./config/paths.js";
+import {
+  EMPTY_SECRETS,
+  type LimboSecrets,
+  mergeSecrets,
+  saveSecrets,
+  secretsToEnv,
+} from "./config/secrets.js";
 import { ClaudeStateDetector } from "./detector/detector.js";
 import type { IClaudeDetector } from "./detector/types.js";
 import { HotkeyInterceptor } from "./hotkey/interceptor.js";
@@ -57,6 +66,8 @@ export interface RunWrapperOptions {
   readonly shameMessage?: string;
   readonly shameHoldMs?: number;
   readonly escalation?: { threshold: number; messages: readonly string[] };
+  /** Pre-loaded secrets; expand into env vars before sidecar spawn. */
+  readonly secrets?: LimboSecrets;
 }
 
 const FORWARDED_SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
@@ -75,6 +86,7 @@ function defaultRegistry(opts: {
   overlayRef: OverlayRef;
   ptyFactory?: PtyFactory;
   stdout?: WrapperStdout;
+  onCredentialsConfirmed?: (s: Partial<LimboSecrets>) => void;
 }): IAdapterRegistry {
   const carbonylBin = opts.env.LIMBO_CARBONYL_BIN ?? "carbonyl";
 
@@ -112,6 +124,12 @@ function defaultRegistry(opts: {
     };
   };
 
+  // Helper: only spread onCredentialsConfirmed when it is defined (exactOptionalPropertyTypes).
+  const credOpts =
+    opts.onCredentialsConfirmed !== undefined
+      ? { onCredentialsConfirmed: opts.onCredentialsConfirmed }
+      : {};
+
   const igReels: AdapterDescriptor = {
     id: "instagram-reels",
     extras: ["instagram"],
@@ -128,6 +146,7 @@ function defaultRegistry(opts: {
       return new InstagramReelsAdapter({
         client: new JsonRpcClient(transport),
         runDetached: makeRunDetached(),
+        ...credOpts,
       });
     },
   };
@@ -148,6 +167,7 @@ function defaultRegistry(opts: {
       return new InstagramFeedAdapter({
         client: new JsonRpcClient(transport),
         runDetached: makeRunDetached(),
+        ...credOpts,
       });
     },
   };
@@ -165,7 +185,10 @@ function defaultRegistry(opts: {
         cwd: opts.cwd,
         spawn: nodeSpawn,
       });
-      return new InstagramDmsAdapter({ client: new JsonRpcClient(transport) });
+      return new InstagramDmsAdapter({
+        client: new JsonRpcClient(transport),
+        ...credOpts,
+      });
     },
   };
 
@@ -185,6 +208,7 @@ function defaultRegistry(opts: {
       return new TwitterHomeAdapter({
         client: new JsonRpcClient(transport),
         runDetached: makeRunDetached(),
+        ...credOpts,
       });
     },
   };
@@ -205,6 +229,7 @@ function defaultRegistry(opts: {
       return new TikTokForYouAdapter({
         client: new JsonRpcClient(transport),
         runSubPane: makeRunSubPane(),
+        ...credOpts,
       });
     },
   };
@@ -252,12 +277,16 @@ function defaultTabs(env: NodeJS.ProcessEnv): readonly TabDefinition[] {
 }
 
 export function runWrapper(opts: RunWrapperOptions): Promise<number> {
+  // Merge secrets into env: secrets fill gaps, explicit process env trumps.
+  const secrets = opts.secrets ?? EMPTY_SECRETS;
+  const mergedEnv: NodeJS.ProcessEnv = { ...secretsToEnv(secrets), ...opts.env };
+
   const cols = opts.stdout.columns ?? DEFAULT_COLS;
   const rows = opts.stdout.rows ?? DEFAULT_ROWS;
   const pty: IPty = opts.ptyFactory({
     file: opts.claudeBin,
     args: opts.argv,
-    env: opts.env,
+    env: mergedEnv,
     cwd: opts.cwd,
     cols,
     rows,
@@ -267,15 +296,28 @@ export function runWrapper(opts: RunWrapperOptions): Promise<number> {
   const detector: IClaudeDetector = opts.detector ?? new ClaudeStateDetector();
   opts.onDetector?.(detector);
 
+  // Mutable secrets reference: updated in place when credentials are confirmed.
+  let currentSecrets: LimboSecrets = secrets;
+
+  // Compute secrets path once using process HOME (falls back to os.homedir()).
+  const secretsPath = getSecretsPath(opts.env, opts.env.HOME ?? homedir());
+
+  const onCredentialsConfirmed = (patch: Partial<LimboSecrets>): void => {
+    currentSecrets = mergeSecrets(currentSecrets, patch);
+    // Fire-and-forget: save is best-effort; failures are silent at this level.
+    void saveSecrets({ path: secretsPath, secrets: currentSecrets });
+  };
+
   const overlayRef: OverlayRef = { current: undefined };
   const registry: IAdapterRegistry =
     opts.adapterRegistry ??
     defaultRegistry({
-      env: opts.env,
+      env: mergedEnv,
       cwd: opts.cwd,
       overlayRef,
       ptyFactory: opts.ptyFactory,
       stdout: opts.stdout,
+      onCredentialsConfirmed: onCredentialsConfirmed,
     });
   const tabs: readonly TabDefinition[] = opts.tabs ?? defaultTabs(opts.env);
 

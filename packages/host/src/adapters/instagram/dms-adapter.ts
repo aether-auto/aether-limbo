@@ -1,8 +1,9 @@
+import type { LimboSecrets } from "../../config/secrets.js";
 import type { KeyAction } from "../../overlay/types.js";
 import type { IDisposable } from "../../pty/types.js";
-import { LoginForm } from "./login-form.js";
 import type { JsonRpcClient } from "../rpc/client.js";
 import type { IAdapter, IPane } from "../types.js";
+import { LoginForm } from "./login-form.js";
 
 // ---------------------------------------------------------------------------
 // RPC result shapes
@@ -49,6 +50,7 @@ interface SendResult {
 
 export interface InstagramDmsAdapterOptions {
   readonly client: JsonRpcClient;
+  readonly onCredentialsConfirmed?: (secrets: Partial<LimboSecrets>) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -68,6 +70,7 @@ export class InstagramDmsAdapter implements IAdapter {
   private subs: IDisposable[] = [];
 
   private mode: Mode = "loading";
+  // Properly initialized in mount() via _makeLoginForm(); placeholder avoids undefined.
   private loginForm: LoginForm = new LoginForm();
 
   private threads: readonly ThreadItem[] = [];
@@ -84,17 +87,15 @@ export class InstagramDmsAdapter implements IAdapter {
 
   async mount(pane: IPane): Promise<void> {
     this.pane = pane;
+    this.loginForm = this._makeLoginForm();
     this.subs.push(pane.on("resize", () => this.repaint()));
 
     let validateResult: ValidateResult;
     try {
-      validateResult = (await this.opts.client.request(
-        "validate",
-        undefined,
-      )) as ValidateResult;
+      validateResult = (await this.opts.client.request("validate", undefined)) as ValidateResult;
     } catch {
       this.mode = "login";
-      this.loginForm = new LoginForm();
+      this.loginForm = this._makeLoginForm();
       this.loginForm.setMessage("connection error");
       this.repaint();
       return;
@@ -110,12 +111,12 @@ export class InstagramDmsAdapter implements IAdapter {
       await this.loadThreads();
     } else if (result.status === "login_required") {
       this.mode = "login";
-      this.loginForm = new LoginForm();
+      this.loginForm = this._makeLoginForm();
       this.repaint();
     } else {
       // "failed" | "2fa_required" or anything unexpected
       this.mode = "login";
-      this.loginForm = new LoginForm();
+      this.loginForm = this._makeLoginForm();
       if (result.message) {
         this.loginForm.setMessage(result.message);
       } else {
@@ -127,17 +128,14 @@ export class InstagramDmsAdapter implements IAdapter {
 
   private async loadThreads(): Promise<void> {
     try {
-      const result = (await this.opts.client.request(
-        "dms/threads",
-        undefined,
-      )) as ThreadsResult;
+      const result = (await this.opts.client.request("dms/threads", undefined)) as ThreadsResult;
       this.threads = result.items;
       this.selectedThread = 0;
       this.mode = "threads";
       this.repaint();
     } catch {
       this.mode = "login";
-      this.loginForm = new LoginForm();
+      this.loginForm = this._makeLoginForm();
       this.loginForm.setMessage("failed to load threads");
       this.repaint();
     }
@@ -265,7 +263,7 @@ export class InstagramDmsAdapter implements IAdapter {
       this.loginForm.setRequires2fa(true);
       this.repaint();
     } else if (result.status === "login_required") {
-      this.loginForm = new LoginForm();
+      this.loginForm = this._makeLoginForm();
       this.mode = "login";
       this.repaint();
     } else {
@@ -279,14 +277,22 @@ export class InstagramDmsAdapter implements IAdapter {
     }
   }
 
+  // -------------------------------------------------------------------------
+  // Helpers
+  // -------------------------------------------------------------------------
+
+  private _makeLoginForm(): LoginForm {
+    return new LoginForm({
+      onCredentialsConfirmed: (creds) =>
+        this.opts.onCredentialsConfirmed?.({ instagram: creds }),
+    });
+  }
+
   handleKey(action: KeyAction): void {
     if (this.mode === "threads") {
       switch (action.kind) {
         case "scroll-down":
-          this.selectedThread = Math.min(
-            this.threads.length - 1,
-            this.selectedThread + 1,
-          );
+          this.selectedThread = Math.min(this.threads.length - 1, this.selectedThread + 1);
           break;
         case "scroll-up":
           this.selectedThread = Math.max(0, this.selectedThread - 1);
@@ -307,10 +313,7 @@ export class InstagramDmsAdapter implements IAdapter {
     if (this.mode === "messages") {
       switch (action.kind) {
         case "scroll-down":
-          this.selectedMessage = Math.min(
-            this.messages.length - 1,
-            this.selectedMessage + 1,
-          );
+          this.selectedMessage = Math.min(this.messages.length - 1, this.selectedMessage + 1);
           break;
         case "scroll-up":
           this.selectedMessage = Math.max(0, this.selectedMessage - 1);
@@ -347,11 +350,7 @@ export class InstagramDmsAdapter implements IAdapter {
     }
 
     if (this.mode === "login") {
-      this.pane.setLines([
-        "[ Instagram login ]",
-        "",
-        ...this.loginForm.renderLines(cols),
-      ]);
+      this.pane.setLines(["[ Instagram login ]", "", ...this.loginForm.renderLines(cols)]);
       return;
     }
 
@@ -389,7 +388,7 @@ export class InstagramDmsAdapter implements IAdapter {
       lines.push("i: reply   Esc: back   j/k: scroll   q: close");
 
       if (this.mode === "input") {
-        lines.push((`reply: ${this.inputBuffer}_`).slice(0, cols));
+        lines.push(`reply: ${this.inputBuffer}_`.slice(0, cols));
       }
 
       this.pane.setLines(lines);
