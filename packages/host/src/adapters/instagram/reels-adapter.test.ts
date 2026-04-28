@@ -44,9 +44,7 @@ class PairedTransport implements ITransport {
   /** Resolve the most-recently issued request with `result`. */
   resolve(result: unknown): void {
     const req = this.lastRequest();
-    this.inject(
-      `${JSON.stringify({ jsonrpc: "2.0", id: req.id, result })}\n`,
-    );
+    this.inject(`${JSON.stringify({ jsonrpc: "2.0", id: req.id, result })}\n`);
   }
 }
 
@@ -118,8 +116,18 @@ describe("InstagramReelsAdapter", () => {
     // reply with 2 items
     t.resolve({
       items: [
-        { pk: "1", code: "abc", caption: "First reel caption", url: "https://www.instagram.com/reel/abc/" },
-        { pk: "2", code: "def", caption: "Second reel caption", url: "https://www.instagram.com/reel/def/" },
+        {
+          pk: "1",
+          code: "abc",
+          caption: "First reel caption",
+          url: "https://www.instagram.com/reel/abc/",
+        },
+        {
+          pk: "2",
+          code: "def",
+          caption: "Second reel caption",
+          url: "https://www.instagram.com/reel/def/",
+        },
       ],
     });
 
@@ -219,7 +227,10 @@ describe("InstagramReelsAdapter", () => {
   });
 
   // Test 5 ─────────────────────────────────────────────────────────────────
-  it("unmount() disposes the client (closes the transport)", async () => {
+  it("unmount() does NOT dispose the shared client (transport stays open)", async () => {
+    // The JsonRpcClient is owned by SharedInstagramSidecar, not by this
+    // adapter.  unmount() must not close the transport so the other two IG
+    // adapters (feed, dms) can still use the same process.
     const stdout = makeStdout();
     const pane = new OverlayPane({ stdout, topRow: 2, bottomRow: 20 });
     const t = new PairedTransport();
@@ -233,6 +244,6 @@ describe("InstagramReelsAdapter", () => {
     await Promise.resolve();
 
     await adapter.unmount();
-    expect(t.closed).toBe(true);
+    expect(t.closed).toBe(false);
   });
 });

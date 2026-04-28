@@ -574,6 +574,28 @@ describe("defaultRegistry", () => {
     }
   });
 
+  it("all instagram-* descriptors have keepWarm: true (shared bundle sidecar)", () => {
+    const registry = _defaultRegistryForTest({ PATH: "/usr/bin" }, "/tmp");
+    const igDescriptors = registry.list().filter((d) => d.id.startsWith("instagram-"));
+    expect(igDescriptors).toHaveLength(3);
+    for (const d of igDescriptors) {
+      expect(d.keepWarm).toBe(true);
+    }
+  });
+
+  it("all instagram-* adapters from create() share the same JsonRpcClient instance", () => {
+    const registry = _defaultRegistryForTest({ PATH: "/usr/bin" }, "/tmp");
+    const igDescriptors = registry.list().filter((d) => d.id.startsWith("instagram-"));
+    // Each descriptor's create() is called once; the injected client comes from
+    // SharedInstagramSidecar.client (lazy singleton), so all three must be ===.
+    // We extract the client via an unknown cast to avoid relying on private shape.
+    type WithClient = { opts: { client: unknown } };
+    const adapters = igDescriptors.map((d) => d.create() as unknown as WithClient);
+    const clients = adapters.map((a) => a.opts.client);
+    expect(clients[0]).toBe(clients[1]);
+    expect(clients[1]).toBe(clients[2]);
+  });
+
   it("the echo descriptor has extras: []", () => {
     const registry = _defaultRegistryForTest({ PATH: "/usr/bin" }, "/tmp");
     const echo = registry.list().find((d) => d.id === "echo");

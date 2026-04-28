@@ -13,18 +13,18 @@ def main() -> int:
         from . import echo
 
         return echo.main()
-    if name == "instagram-reels":
-        from .instagram import reels
+    if name == "instagram":
+        from .instagram import bundle
 
-        return reels.main()
-    if name == "instagram-feed":
-        from .instagram import feed
+        return bundle.main()
+    if name in ("instagram-reels", "instagram-feed", "instagram-dms"):
+        sys.stderr.write(
+            f"deprecated: '{name}' has been merged into 'instagram'. "
+            "Use: python -m limbo_sidecars instagram\n"
+        )
+        from .instagram import bundle
 
-        return feed.main()
-    if name == "instagram-dms":
-        from .instagram import dms
-
-        return dms.main()
+        return bundle.main()
     if name == "twitter-home":
         from .twitter import home
 

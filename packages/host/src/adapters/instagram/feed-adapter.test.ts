@@ -44,9 +44,7 @@ class PairedTransport implements ITransport {
   /** Resolve the most-recently issued request with `result`. */
   resolve(result: unknown): void {
     const req = this.lastRequest();
-    this.inject(
-      `${JSON.stringify({ jsonrpc: "2.0", id: req.id, result })}\n`,
-    );
+    this.inject(`${JSON.stringify({ jsonrpc: "2.0", id: req.id, result })}\n`);
   }
 }
 
@@ -118,8 +116,20 @@ describe("InstagramFeedAdapter", () => {
     // reply with 2 items
     t.resolve({
       items: [
-        { pk: "1", code: "aaa", author: "alice", caption: "hello world", url: "https://www.instagram.com/p/aaa/" },
-        { pk: "2", code: "bbb", author: "bob", caption: "second post", url: "https://www.instagram.com/p/bbb/" },
+        {
+          pk: "1",
+          code: "aaa",
+          author: "alice",
+          caption: "hello world",
+          url: "https://www.instagram.com/p/aaa/",
+        },
+        {
+          pk: "2",
+          code: "bbb",
+          author: "bob",
+          caption: "second post",
+          url: "https://www.instagram.com/p/bbb/",
+        },
       ],
     });
 
@@ -199,8 +209,20 @@ describe("InstagramFeedAdapter", () => {
     // feed/list → 2 items
     t.resolve({
       items: [
-        { pk: "1", code: "aaa", author: "alice", caption: "hello world", url: "https://www.instagram.com/p/aaa/" },
-        { pk: "2", code: "bbb", author: "bob", caption: "second post", url: "https://www.instagram.com/p/bbb/" },
+        {
+          pk: "1",
+          code: "aaa",
+          author: "alice",
+          caption: "hello world",
+          url: "https://www.instagram.com/p/aaa/",
+        },
+        {
+          pk: "2",
+          code: "bbb",
+          author: "bob",
+          caption: "second post",
+          url: "https://www.instagram.com/p/bbb/",
+        },
       ],
     });
 
@@ -219,7 +241,10 @@ describe("InstagramFeedAdapter", () => {
   });
 
   // Test 5 ─────────────────────────────────────────────────────────────────
-  it("unmount() disposes the client (closes the transport)", async () => {
+  it("unmount() does NOT dispose the shared client (transport stays open)", async () => {
+    // The JsonRpcClient is owned by SharedInstagramSidecar, not by this
+    // adapter.  unmount() must not close the transport so the other two IG
+    // adapters (reels, dms) can still use the same process.
     const stdout = makeStdout();
     const pane = new OverlayPane({ stdout, topRow: 2, bottomRow: 20 });
     const t = new PairedTransport();
@@ -233,6 +258,6 @@ describe("InstagramFeedAdapter", () => {
     await Promise.resolve();
 
     await adapter.unmount();
-    expect(t.closed).toBe(true);
+    expect(t.closed).toBe(false);
   });
 });

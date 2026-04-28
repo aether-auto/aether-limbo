@@ -6,6 +6,7 @@ import { EchoAdapter } from "./adapters/echo-adapter.js";
 import { InstagramDmsAdapter } from "./adapters/instagram/dms-adapter.js";
 import { InstagramFeedAdapter } from "./adapters/instagram/feed-adapter.js";
 import { InstagramReelsAdapter } from "./adapters/instagram/reels-adapter.js";
+import { SharedInstagramSidecar } from "./adapters/instagram/shared-sidecar.js";
 import { BuiltinAdapterRegistry } from "./adapters/registry.js";
 import { JsonRpcClient } from "./adapters/rpc/client.js";
 import { ChildProcessTransport } from "./adapters/sidecar/child-transport.js";
@@ -130,66 +131,51 @@ function defaultRegistry(opts: {
       ? { onCredentialsConfirmed: opts.onCredentialsConfirmed }
       : {};
 
+  // One shared sidecar process for all three Instagram adapters.  The client
+  // is lazy-initialised on first access and disposed by the registry's
+  // dispose() path (called on wrapper exit).
+  const igSidecar = new SharedInstagramSidecar({
+    env: opts.env,
+    cwd: opts.cwd,
+    spawn: nodeSpawn,
+  });
+
   const igReels: AdapterDescriptor = {
     id: "instagram-reels",
     extras: ["instagram"],
     enabled: true,
-    keepWarm: false,
-    create: (): IAdapter => {
-      const transport = new ChildProcessTransport({
-        pythonExe: "python3",
-        args: ["-m", "limbo_sidecars", "instagram-reels"],
-        env: opts.env,
-        cwd: opts.cwd,
-        spawn: nodeSpawn,
-      });
-      return new InstagramReelsAdapter({
-        client: new JsonRpcClient(transport),
+    keepWarm: true,
+    create: (): IAdapter =>
+      new InstagramReelsAdapter({
+        client: igSidecar.client,
         runDetached: makeRunDetached(),
         ...credOpts,
-      });
-    },
+      }),
   };
 
   const igFeed: AdapterDescriptor = {
     id: "instagram-feed",
     extras: ["instagram"],
     enabled: true,
-    keepWarm: false,
-    create: (): IAdapter => {
-      const transport = new ChildProcessTransport({
-        pythonExe: "python3",
-        args: ["-m", "limbo_sidecars", "instagram-feed"],
-        env: opts.env,
-        cwd: opts.cwd,
-        spawn: nodeSpawn,
-      });
-      return new InstagramFeedAdapter({
-        client: new JsonRpcClient(transport),
+    keepWarm: true,
+    create: (): IAdapter =>
+      new InstagramFeedAdapter({
+        client: igSidecar.client,
         runDetached: makeRunDetached(),
         ...credOpts,
-      });
-    },
+      }),
   };
 
   const igDms: AdapterDescriptor = {
     id: "instagram-dms",
     extras: ["instagram"],
     enabled: true,
-    keepWarm: false,
-    create: (): IAdapter => {
-      const transport = new ChildProcessTransport({
-        pythonExe: "python3",
-        args: ["-m", "limbo_sidecars", "instagram-dms"],
-        env: opts.env,
-        cwd: opts.cwd,
-        spawn: nodeSpawn,
-      });
-      return new InstagramDmsAdapter({
-        client: new JsonRpcClient(transport),
+    keepWarm: true,
+    create: (): IAdapter =>
+      new InstagramDmsAdapter({
+        client: igSidecar.client,
         ...credOpts,
-      });
-    },
+      }),
   };
 
   const twitterHome: AdapterDescriptor = {
@@ -251,7 +237,7 @@ function defaultRegistry(opts: {
     },
   };
 
-  return new BuiltinAdapterRegistry([
+  const inner = new BuiltinAdapterRegistry([
     igReels,
     igFeed,
     igDms,
@@ -259,6 +245,18 @@ function defaultRegistry(opts: {
     tiktokForYou,
     echoDescriptor,
   ]);
+
+  // Wrap dispose() so the shared Instagram sidecar process is also torn down
+  // when the registry shuts down (wrapper exit).
+  return {
+    get: (id: string) => inner.get(id),
+    list: () => inner.list(),
+    release: (adapter: IAdapter) => inner.release(adapter),
+    dispose: async (): Promise<void> => {
+      await inner.dispose();
+      igSidecar.dispose();
+    },
+  };
 }
 
 // @internal — test seam only; not part of the public API

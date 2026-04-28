@@ -125,7 +125,9 @@ export class InstagramFeedAdapter implements IAdapter {
     for (const s of this.subs) s.dispose();
     this.subs = [];
     this.pane = undefined;
-    this.opts.client.dispose();
+    // The JsonRpcClient is owned by the shared sidecar and must not be
+    // disposed here. The registry's dispose() path tears it down via
+    // SharedInstagramSidecar.dispose().
   }
 
   captureInput(chunk: string): boolean {
@@ -189,8 +191,7 @@ export class InstagramFeedAdapter implements IAdapter {
 
   private _makeLoginForm(): LoginForm {
     return new LoginForm({
-      onCredentialsConfirmed: (creds) =>
-        this.opts.onCredentialsConfirmed?.({ instagram: creds }),
+      onCredentialsConfirmed: (creds) => this.opts.onCredentialsConfirmed?.({ instagram: creds }),
     });
   }
 
