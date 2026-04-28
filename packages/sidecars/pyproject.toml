@@ -11,10 +11,13 @@ dependencies = []
 [project.optional-dependencies]
 instagram = ["instagrapi>=2.1.0"]
 twitter = ["twikit>=2.0.0"]
+tweepy = ["tweepy>=4.14.0"]
+twitter-tweepy = ["tweepy>=4.14.0"]
 tiktok = ["TikTokApi>=7.1.0", "playwright>=1.47.0"]
 all = [
   "instagrapi>=2.1.0",
   "twikit>=2.0.0",
+  "tweepy>=4.14.0",
   "TikTokApi>=7.1.0",
   "playwright>=1.47.0",
 ]
