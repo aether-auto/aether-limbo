@@ -60,7 +60,10 @@ describe("runConfigEdit", () => {
   it("falls back nano → vi when neither env var set and nano not found", async () => {
     const spawnSync = vi
       .fn()
-      .mockReturnValueOnce({ status: 0, error: Object.assign(new Error("not found"), { code: "ENOENT" }) })
+      .mockReturnValueOnce({
+        status: 0,
+        error: Object.assign(new Error("not found"), { code: "ENOENT" }),
+      })
       .mockReturnValue({ status: 0, error: undefined });
     await runConfigEdit(makeDeps({ env: {}, spawnSync }));
     expect(spawnSync).toHaveBeenCalledTimes(2);

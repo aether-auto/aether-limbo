@@ -776,7 +776,12 @@ describe("runWrapper — config-driven options", () => {
       return captured;
     });
     const customTabs = [
-      { id: "reels" as const, label: "Reels Only", placeholderRef: "test", adapterId: "instagram-reels" },
+      {
+        id: "reels" as const,
+        label: "Reels Only",
+        placeholderRef: "test",
+        adapterId: "instagram-reels",
+      },
     ];
     let capturedOverlay: IOverlayController | undefined;
     const promise = runWrapper({
@@ -789,7 +794,9 @@ describe("runWrapper — config-driven options", () => {
       process: proc as unknown as NodeJS.Process,
       ptyFactory: factory,
       tabs: customTabs,
-      onOverlay: (o) => { capturedOverlay = o; },
+      onOverlay: (o) => {
+        capturedOverlay = o;
+      },
     });
     if (!captured) throw new Error("factory not invoked synchronously");
     capturedOverlay?.open();
@@ -814,7 +821,9 @@ describe("runWrapper — config-driven options", () => {
     const stateListeners: StateListener[] = [];
     const fakeDetector: IClaudeDetector = {
       feed() {},
-      getState() { return "streaming" as const; },
+      getState() {
+        return "streaming" as const;
+      },
       on(_event: "state", listener: StateListener) {
         stateListeners.push(listener);
         return { dispose: () => undefined };
@@ -834,7 +843,9 @@ describe("runWrapper — config-driven options", () => {
       ptyFactory: factory,
       detector: fakeDetector,
       snapBackEnabled: false,
-      onOverlay: (o) => { capturedOverlay = o; },
+      onOverlay: (o) => {
+        capturedOverlay = o;
+      },
     });
     if (!captured) throw new Error("factory not invoked synchronously");
 
@@ -853,13 +864,17 @@ describe("runWrapper — config-driven options", () => {
   });
 
   it("globalKeepWarm=true sets keepWarm=true on tiktok-foryou descriptor", () => {
-    const registry = _defaultRegistryForTest({ PATH: "/usr/bin" }, "/tmp", { globalKeepWarm: true });
+    const registry = _defaultRegistryForTest({ PATH: "/usr/bin" }, "/tmp", {
+      globalKeepWarm: true,
+    });
     const tiktok = registry.list().find((d) => d.id === "tiktok-foryou");
     expect(tiktok?.keepWarm).toBe(true);
   });
 
   it("globalKeepWarm=false keeps tiktok-foryou keepWarm=false when tiktokKeepWarm unset", () => {
-    const registry = _defaultRegistryForTest({ PATH: "/usr/bin" }, "/tmp", { globalKeepWarm: false });
+    const registry = _defaultRegistryForTest({ PATH: "/usr/bin" }, "/tmp", {
+      globalKeepWarm: false,
+    });
     const tiktok = registry.list().find((d) => d.id === "tiktok-foryou");
     expect(tiktok?.keepWarm).toBe(false);
   });
@@ -874,13 +889,17 @@ describe("runWrapper — config-driven options", () => {
   });
 
   it("globalKeepWarm=true sets keepWarm=true on twitter-home descriptor", () => {
-    const registry = _defaultRegistryForTest({ PATH: "/usr/bin" }, "/tmp", { globalKeepWarm: true });
+    const registry = _defaultRegistryForTest({ PATH: "/usr/bin" }, "/tmp", {
+      globalKeepWarm: true,
+    });
     const twitter = registry.list().find((d) => d.id === "twitter-home");
     expect(twitter?.keepWarm).toBe(true);
   });
 
   it("globalKeepWarm=false leaves twitter-home keepWarm=false", () => {
-    const registry = _defaultRegistryForTest({ PATH: "/usr/bin" }, "/tmp", { globalKeepWarm: false });
+    const registry = _defaultRegistryForTest({ PATH: "/usr/bin" }, "/tmp", {
+      globalKeepWarm: false,
+    });
     const twitter = registry.list().find((d) => d.id === "twitter-home");
     expect(twitter?.keepWarm).toBe(false);
   });
