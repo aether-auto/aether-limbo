@@ -138,6 +138,7 @@ def test_login_once_then_all_namespaces_use_same_session(tmp_path: Path) -> None
 
     # dms/threads works on the same session.
     threads_result = h["dms/threads"](None)
+    assert threads_result["available"] is True
     assert len(threads_result["items"]) == 1
     assert threads_result["items"][0]["title"] == "alice"
 
@@ -178,7 +179,10 @@ def test_dms_threads_shape(tmp_path: Path) -> None:
     )
     h = build_handlers(sess, target_username="")
     out = h["dms/threads"](None)
-    assert out == {"items": [{"thread_id": "t1", "title": "alice", "last_message": "hi"}]}
+    assert out == {
+        "available": True,
+        "items": [{"thread_id": "t1", "title": "alice", "last_message": "hi"}],
+    }
 
 
 def test_dms_messages_shape(tmp_path: Path) -> None:
@@ -187,7 +191,44 @@ def test_dms_messages_shape(tmp_path: Path) -> None:
     )
     h = build_handlers(sess, target_username="")
     out = h["dms/messages"]({"thread_id": "t1"})
-    assert out == {"items": [{"from": "42", "text": "hello", "ts": "ts1"}]}
+    assert out == {
+        "available": True,
+        "items": [{"from": "42", "text": "hello", "ts": "ts1"}],
+    }
+
+
+def test_dms_threads_degrades_on_error(tmp_path: Path) -> None:
+    """dms/threads returns {available: False, items: [], message: ...} on exception."""
+
+    class ErrorClient(FakeClient):
+        def direct_threads(self, amount: int = 20) -> list[Any]:
+            raise RuntimeError("401 auth expired")
+
+    sess = IGSession(
+        client=ErrorClient(), session_path=tmp_path / "x.json", two_factor_exc=TwoFactor
+    )
+    h = build_handlers(sess, target_username="")
+    out = h["dms/threads"](None)
+    assert out["available"] is False
+    assert out["items"] == []
+    assert "401" in out["message"] or "auth" in out["message"]
+
+
+def test_dms_messages_degrades_on_error(tmp_path: Path) -> None:
+    """dms/messages returns {available: False, items: [], message: ...} on exception."""
+
+    class ErrorClient(FakeClient):
+        def direct_messages(self, thread_id: str, amount: int = 20) -> list[Any]:
+            raise RuntimeError("rate limit exceeded")
+
+    sess = IGSession(
+        client=ErrorClient(), session_path=tmp_path / "x.json", two_factor_exc=TwoFactor
+    )
+    h = build_handlers(sess, target_username="")
+    out = h["dms/messages"]({"thread_id": "t1"})
+    assert out["available"] is False
+    assert out["items"] == []
+    assert "rate limit" in out["message"]
 
 
 def test_dms_send_ok(tmp_path: Path) -> None:

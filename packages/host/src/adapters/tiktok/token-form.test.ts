@@ -59,12 +59,11 @@ describe("TokenForm", () => {
 
   it("7. renderLines(40) masks token: last 4 visible, rest as *", () => {
     const form = new TokenForm();
-    // Avoid 'm' since it now toggles rememberMe and is not appended to the token.
-    form.feed("abcdefghijklnop"); // 15 chars (no 'm')
+    form.feed("abcdefghijklmnop"); // 16 chars (including 'm' which is now a normal printable char)
     const lines = form.renderLines(40);
     const joined = lines.join("\n");
-    // last 4 chars = "lnop", first 11 = "***********"
-    expect(joined).toContain("***********lnop");
+    // last 4 chars = "mnop", first 12 = "************"
+    expect(joined).toContain("************mnop");
   });
 
   it("8. renderLines(40) for token shorter than 4 chars shows all chars verbatim", () => {

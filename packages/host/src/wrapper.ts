@@ -448,8 +448,14 @@ export function runWrapper(opts: RunWrapperOptions): Promise<number> {
 
   const onCredentialsConfirmed = (patch: Partial<LimboSecrets>): void => {
     currentSecrets = mergeSecrets(currentSecrets, patch);
-    // Fire-and-forget: save is best-effort; failures are silent at this level.
-    void saveSecrets({ path: secretsPath, secrets: currentSecrets });
+    // Best-effort save: log to stderr on failure so the user knows credentials weren't persisted.
+    saveSecrets({ path: secretsPath, secrets: currentSecrets }).catch((err) =>
+      process.stderr.write(
+        "limbo: failed to save secrets: " +
+          (err instanceof Error ? err.message : String(err)) +
+          "\n",
+      ),
+    );
   };
 
   const overlayRef: OverlayRef = { current: undefined };

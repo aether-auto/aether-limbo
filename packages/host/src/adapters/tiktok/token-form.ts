@@ -60,9 +60,9 @@ export class TokenForm {
         continue;
       }
 
-      // 'm' key toggles remember-me (mnemonic: m = memorise).
-      // Handled before printable-char append so it doesn't land in the token.
-      if (ch === "m") {
+      // Ctrl+R (\x12) toggles remember-me (mnemonic: R = Remember).
+      // Uses a non-printable control sequence so it cannot conflict with token characters.
+      if (ch === "\x12") {
         this._rememberMe = !this._rememberMe;
         continue;
       }
@@ -101,7 +101,7 @@ export class TokenForm {
       trunc("Paste ms_token cookie:"),
       trunc(`→ ms_token: ${masked}`),
       trunc(""),
-      trunc(`${rmBox} remember me  (m: toggle)`),
+      trunc(`${rmBox} remember me  (Ctrl+R: toggle)`),
       trunc(""),
       trunc("Enter: submit   Esc: cancel"),
     ];

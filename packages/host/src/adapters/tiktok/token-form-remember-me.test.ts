@@ -11,24 +11,24 @@ describe("TokenForm — rememberMe toggle", () => {
     expect(form.snapshot().rememberMe).toBe(false);
   });
 
-  it("'m' key toggles rememberMe on", () => {
+  it("Ctrl+R (\\x12) toggles rememberMe on", () => {
     const form = new TokenForm();
-    form.feed("m");
+    form.feed("\x12");
     expect(form.snapshot().rememberMe).toBe(true);
-    // token must NOT have 'm' appended
+    // token must NOT have anything appended
     expect(form.snapshot().token).toBe("");
   });
 
-  it("'m' key toggles rememberMe back off", () => {
+  it("Ctrl+R (\\x12) toggles rememberMe back off", () => {
     const form = new TokenForm();
-    form.feed("m");
-    form.feed("m");
+    form.feed("\x12");
+    form.feed("\x12");
     expect(form.snapshot().rememberMe).toBe(false);
   });
 
   it("renderLines shows '[x] remember me' when true", () => {
     const form = new TokenForm();
-    form.feed("m");
+    form.feed("\x12");
     const lines = form.renderLines(80);
     expect(lines.join("\n")).toContain("[x]");
     expect(lines.join("\n")).toContain("remember me");
@@ -41,12 +41,12 @@ describe("TokenForm — rememberMe toggle", () => {
     expect(lines.join("\n")).toContain("remember me");
   });
 
-  it("'m' does not append to token — token remains accumulation of other printable chars", () => {
+  it("Ctrl+R does not append to token — 'm' is now a normal printable char", () => {
     const form = new TokenForm();
     form.feed("ab");
-    form.feed("m"); // toggle, not appended
-    form.feed("cd");
-    expect(form.snapshot().token).toBe("abcd");
+    form.feed("\x12"); // toggle, not appended
+    form.feed("mcd"); // 'm' is now a regular printable character
+    expect(form.snapshot().token).toBe("abmcd");
     expect(form.snapshot().rememberMe).toBe(true);
   });
 });
@@ -59,7 +59,7 @@ describe("TokenForm — rememberMe=true fires onCredentialsConfirmed on submit",
   it("calls callback with tiktok.msToken", () => {
     const cb = vi.fn();
     const form = new TokenForm({ onCredentialsConfirmed: cb });
-    form.feed("m"); // enable rememberMe
+    form.feed("\x12"); // enable rememberMe
     form.feed("eyJtoken123"); // token input
     form.feed("\r"); // submit
 
@@ -73,7 +73,7 @@ describe("TokenForm — rememberMe=true fires onCredentialsConfirmed on submit",
       order.push("cb");
     });
     const form = new TokenForm({ onCredentialsConfirmed: cb });
-    form.feed("m");
+    form.feed("\x12");
     form.feed("tok");
     const action = form.feed("\r");
     order.push("action");
@@ -104,7 +104,7 @@ describe("TokenForm — cancel never fires onCredentialsConfirmed", () => {
   it("Esc does not trigger callback", () => {
     const cb = vi.fn();
     const form = new TokenForm({ onCredentialsConfirmed: cb });
-    form.feed("m");
+    form.feed("\x12");
     form.feed("tok");
     const action = form.feed("\x1b");
     expect(action?.kind).toBe("cancel");
@@ -120,7 +120,7 @@ describe("TokenForm — empty submit does not fire callback", () => {
   it("callback not called when token is empty", () => {
     const cb = vi.fn();
     const form = new TokenForm({ onCredentialsConfirmed: cb });
-    form.feed("m");
+    form.feed("\x12");
     // no token typed
     const action = form.feed("\r");
     expect(action).toBeUndefined();

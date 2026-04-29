@@ -13,9 +13,6 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from limbo_sidecars.instagram.dms import build_handlers as _build_dms
-from limbo_sidecars.instagram.feed import build_handlers as _build_feed
-from limbo_sidecars.instagram.reels import build_handlers as _build_reels
 from limbo_sidecars.instagram.session import IGSession
 
 # ---------------------------------------------------------------------------
@@ -227,37 +224,43 @@ def build_handlers(
     # ---------------------------------------------------------------------------
 
     def dms_threads(_p: Any) -> dict[str, Any]:
-        client = session.client
-        threads = client.direct_threads(amount=20)  # type: ignore[attr-defined]
-        items = []
-        for t in threads:
-            users = t.users
-            if len(users) == 1:
-                title = str(users[0].username)
-            else:
-                title = "Group"
-            messages = t.messages
-            last_message = str(messages[0].text) if messages else ""
-            items.append({
-                "thread_id": str(t.id),
-                "title": title,
-                "last_message": last_message,
-            })
-        return {"items": items}
+        try:
+            client = session.client
+            threads = client.direct_threads(amount=20)  # type: ignore[attr-defined]
+            items = []
+            for t in threads:
+                users = t.users
+                if len(users) == 1:
+                    title = str(users[0].username)
+                else:
+                    title = "Group"
+                messages = t.messages
+                last_message = str(messages[0].text) if messages else ""
+                items.append({
+                    "thread_id": str(t.id),
+                    "title": title,
+                    "last_message": last_message,
+                })
+            return {"available": True, "items": items}
+        except Exception as err:  # noqa: BLE001 — auth-expired / rate-limit degradation
+            return {"available": False, "items": [], "message": str(err)}
 
     def dms_messages(p: Any) -> dict[str, Any]:
-        client = session.client
-        thread_id: str = p["thread_id"]
-        messages = client.direct_messages(thread_id, amount=20)  # type: ignore[attr-defined]
-        items = [
-            {
-                "from": str(m.user_id),
-                "text": str(m.text),
-                "ts": str(m.timestamp),
-            }
-            for m in messages
-        ]
-        return {"items": items}
+        try:
+            client = session.client
+            thread_id: str = p["thread_id"]
+            messages = client.direct_messages(thread_id, amount=20)  # type: ignore[attr-defined]
+            items = [
+                {
+                    "from": str(m.user_id),
+                    "text": str(m.text),
+                    "ts": str(m.timestamp),
+                }
+                for m in messages
+            ]
+            return {"available": True, "items": items}
+        except Exception as err:  # noqa: BLE001 — auth-expired / rate-limit degradation
+            return {"available": False, "items": [], "message": str(err)}
 
     def dms_send(p: Any) -> dict[str, Any]:
         client = session.client

@@ -55,10 +55,10 @@ class FakeClientV2:
         ][:max_results]
         return FakeResponse(data=tweets, includes={"users": users})
 
-    def like(self, user_id: Any, tweet_id: str) -> Any:
+    def like(self, *, tweet_id: str, user_auth: bool = False, **kwargs: Any) -> Any:
         if self.raise_on_like is not None:
             raise self.raise_on_like
-        self.like_calls.append((user_id, tweet_id))
+        self.like_calls.append(tweet_id)
         return SimpleNamespace(data=SimpleNamespace(liked=True))
 
     def create_tweet(self, *, text: str, in_reply_to_tweet_id: str) -> Any:
@@ -224,7 +224,7 @@ def test_home_timeline_respects_limit(
 def test_like_calls_client_like_and_returns_ok(session_ok: TweepySession, fake_tweepy: FakeTweepyModule) -> None:
     result = session_ok.like("111")
     assert result == {"ok": True}
-    assert fake_tweepy._client_v2.like_calls[0][1] == "111"
+    assert fake_tweepy._client_v2.like_calls[0] == "111"
 
 
 def test_like_returns_error_dict_on_exception(

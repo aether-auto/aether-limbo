@@ -41,6 +41,8 @@ class TweepySession:
 
     def __init__(self, *, tweepy_module: Any = None) -> None:
         self._tweepy_module: Any = tweepy_module  # resolved on first access
+        self._cached_v2: Any = None  # lazily populated by _client_v2()
+        self._cached_v1: Any = None  # lazily populated by _api_v1()
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -64,19 +66,23 @@ class TweepySession:
         return None
 
     def _client_v2(self) -> Any:
-        """Return a tweepy.Client configured for v2 read operations."""
-        tw = self._tweepy()
-        return tw.Client(bearer_token=self._bearer_token())
+        """Return a lazily-cached tweepy.Client configured for v2 read operations."""
+        if self._cached_v2 is None:
+            tw = self._tweepy()
+            self._cached_v2 = tw.Client(bearer_token=self._bearer_token())
+        return self._cached_v2
 
     def _api_v1(self) -> Any:
-        """Return a tweepy.API configured for v1.1 actions."""
-        tw = self._tweepy()
-        creds = self._v1_creds()
-        if creds is None:
-            raise RuntimeError("v1.1 credentials not set")
-        api_key, api_secret, access_token, access_secret = creds
-        auth = tw.OAuth1UserHandler(api_key, api_secret, access_token, access_secret)
-        return tw.API(auth)
+        """Return a lazily-cached tweepy.API configured for v1.1 actions."""
+        if self._cached_v1 is None:
+            tw = self._tweepy()
+            creds = self._v1_creds()
+            if creds is None:
+                raise RuntimeError("v1.1 credentials not set")
+            api_key, api_secret, access_token, access_secret = creds
+            auth = tw.OAuth1UserHandler(api_key, api_secret, access_token, access_secret)
+            self._cached_v1 = tw.API(auth)
+        return self._cached_v1
 
     # ------------------------------------------------------------------
     # Public interface (mirrors TwitterSession)
@@ -141,14 +147,10 @@ class TweepySession:
         return items
 
     def like(self, tweet_id: str) -> dict[str, Any]:
-        """Like a tweet via v2 Client."""
+        """Like a tweet via v2 Client using user_auth (keyword-safe across tweepy versions)."""
         try:
-            # v2 like requires an authenticated user id; we use the me() call
             client = self._client_v2()
-            me = client.get_me()
-            if me is None or me.data is None:
-                return {"ok": False, "message": "Could not resolve authenticated user"}
-            client.like(me.data.id, tweet_id)
+            client.like(tweet_id=tweet_id, user_auth=True)
             return {"ok": True}
         except Exception as err:  # noqa: BLE001 — protocol boundary
             return {"ok": False, "message": str(err)}

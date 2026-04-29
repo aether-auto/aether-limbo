@@ -17,6 +17,7 @@ import {
 function makeStatFs(mode: number, content: string): SecretsReader {
   return {
     stat: async (_p: string) => ({ mode }),
+    lstat: async (_p: string) => ({ mode }),
     readFile: async (_p: string) => Buffer.from(content),
   };
 }
@@ -24,6 +25,9 @@ function makeStatFs(mode: number, content: string): SecretsReader {
 function makeEnoentFs(): SecretsReader {
   return {
     stat: async (_p: string) => {
+      throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+    },
+    lstat: async (_p: string) => {
       throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
     },
     readFile: async (_p: string) => {
@@ -167,6 +171,29 @@ describe("loadSecrets — insecure perms (0o755, group execute bit)", () => {
     });
     expect(result.insecure).toBe(true);
     expect(logger.warn).toHaveBeenCalledOnce();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// loadSecrets — symlink refusal
+// ---------------------------------------------------------------------------
+
+describe("loadSecrets — symlink at secrets.toml is refused", () => {
+  it("returns empty, insecure:true, and logs a warning when lstat reports a symlink", async () => {
+    // S_IFLNK (0o120000) combined with typical rwx bits = 0o120777
+    const symlinkMode = 0o120777;
+    const logger = { warn: vi.fn() };
+    const result = await loadSecrets({
+      path: "/home/user/.config/aether-limbo/secrets.toml",
+      fs: makeStatFs(symlinkMode, '[tiktok]\nms_token = "tok"'),
+      logger,
+    });
+    expect(result.secrets).toEqual(EMPTY_SECRETS);
+    expect(result.loadedFrom).toBeNull();
+    expect(result.insecure).toBe(true);
+    expect(logger.warn).toHaveBeenCalledOnce();
+    const warnArg = logger.warn.mock.calls[0]?.[0] as string;
+    expect(warnArg).toContain("symlink");
   });
 });
 

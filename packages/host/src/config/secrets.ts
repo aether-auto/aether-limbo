@@ -2,6 +2,7 @@ import {
   mkdir as nodeMkdir,
   readFile as nodeReadFile,
   rename as nodeRename,
+  lstat as nodeLstat,
   stat as nodeStat,
   writeFile as nodeWriteFile,
 } from "node:fs/promises";
@@ -57,6 +58,7 @@ export interface SecretsLogger {
 export interface SecretsReader {
   readFile(path: string): Promise<Buffer | string>;
   stat(path: string): Promise<{ mode: number }>;
+  lstat(path: string): Promise<{ mode: number }>;
 }
 
 /** Minimal fs abstraction for saveSecrets. */
@@ -191,18 +193,25 @@ export async function loadSecrets({
   const defaultFs: SecretsReader = {
     readFile: (p: string) => nodeReadFile(p),
     stat: (p: string) => nodeStat(p),
+    lstat: (p: string) => nodeLstat(p),
   };
   const fsRead: SecretsReader = fsImpl ?? defaultFs;
 
-  // Check existence and permissions via stat
+  // Check existence and permissions via lstat (does NOT follow symlinks)
   let statResult: { mode: number };
   try {
-    statResult = await fsRead.stat(path);
+    statResult = await fsRead.lstat(path);
   } catch (err) {
     if (isEnoent(err)) {
       return { secrets: EMPTY_SECRETS, loadedFrom: null, insecure: false };
     }
     throw err;
+  }
+
+  // Refuse to load if the path is a symlink (S_IFLNK = 0o120000)
+  if ((statResult.mode & 0o170000) === 0o120000) {
+    logger.warn(`WARNING: secrets.toml is a symlink — refusing to load.`);
+    return { secrets: EMPTY_SECRETS, loadedFrom: null, insecure: true };
   }
 
   // Check for insecure permissions: any group or other read/write bits set
